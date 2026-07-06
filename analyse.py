@@ -261,6 +261,10 @@ def _abschlussbericht(auszuege: List[Auszug], fehler: List[str]) -> None:
     print(f"    ohne Saldo-Pruefung: {ohne}")
     if pruef:
         print("  >> Bitte Sheet 'Pruefen' kontrollieren (Saldo ging nicht auf).")
+    betrag_fehlt = sum(len(a.unvollstaendige) for a in auszuege)
+    if betrag_fehlt:
+        print(f"    betrag_fehlt Zeilen: {betrag_fehlt} (Buchungszeilen ohne eigenen "
+              f"Betrag -- siehe Report je Auszug oben)")
     if fehler:
         print(f"\n  Uebersprungene Dateien ({len(fehler)}):")
         for f in fehler:

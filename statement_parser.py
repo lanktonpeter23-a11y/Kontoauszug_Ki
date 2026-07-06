@@ -197,56 +197,51 @@ def _laufender_saldo_layout(kandidaten: List[str], profil: Optional[Dict[str, An
 
 
 def _parse_buchungen(text: str, auszug: Auszug, profil: Optional[Dict[str, Any]]) -> List[Buchung]:
-    """Generischer, zeilenbasierter Buchungs-Parser.
+    """Zeilenbasierter Buchungs-Parser -- Bu-Tag ist das Primaerkriterium.
 
-    Eine Buchung beginnt an einer Zeile mit fuehrendem Datum. Folgezeilen
-    ohne Datum (Verwendungszweck-Fortsetzung) werden angehaengt. Der Betrag
-    ist der rechte Betrag der Zeile (bzw. der vorletzte bei laufendem Saldo).
+    KERN-REGEL (deterministisch, kein Wortraten):
+      * Eine Buchung ist GENAU eine Zeile, die mit dem Bu-Tag "TT.MM." BEGINNT.
+      * Ihr Betrag steht in DERSELBEN Zeile rechts (mit S/H). Es wird NIE ein
+        Betrag aus einer Nicht-Buchungszeile (Folgezeile, Uebertrag,
+        Kontostand, IBAN, Referenz) uebernommen.
+      * Zeilen ohne fuehrenden Bu-Tag sind reine Verwendungszweck-Fortsetzung
+        (Text) und liefern niemals einen Buchungsbetrag.
+      * Hat eine Buchungszeile keinen eigenen Betrag -> "betrag_fehlt": sie
+        wird gemeldet (auszug.unvollstaendige) und NICHT in Summe/Journal
+        aufgenommen.
     """
     zeilen = [z for z in text.splitlines() if z.strip()]
 
-    # Erst Kandidaten-Zeilen (mit fuehrendem Datum, keine Carry-Zeilen)
-    # bestimmen, um das Layout (laufender Saldo?) zu erkennen.
-    kandidaten = [
-        z for z in zeilen
-        if finde_datum_am_anfang(z) and not _ist_carry_zeile(z)
-    ]
+    # Kandidaten (Bu-Tag-Zeilen) bestimmen, um das Layout (laufender Saldo?)
+    # zu erkennen. finde_datum_am_anfang matcht nur ein Datum GANZ am Anfang.
+    kandidaten = [z for z in zeilen if finde_datum_am_anfang(z)]
     laufend = _laufender_saldo_layout(kandidaten, profil)
 
     buchungen: List[Buchung] = []
     aktuell: Optional[Buchung] = None
 
     for zeile in zeilen:
-        # FIX 2: Uebertrags-/Kontostand-/Summenzeilen komplett ignorieren --
-        # weder neue Buchung, noch Betrag-Nachreichung, noch Zweck-Fortsetzung.
-        if _ist_carry_zeile(zeile):
-            continue
-
         datum_info = finde_datum_am_anfang(zeile)
 
         if datum_info:
-            # Neue Buchung beginnt hier (Betrag darf None sein -> folgt spaeter).
+            # BUCHUNGSZEILE: Betrag kommt AUSSCHLIESSLICH aus dieser Zeile.
             tag, monat, jahr, ende = datum_info
             betrag, zweck, explizit = _betrag_und_zweck(zeile, ende, laufend)
             aktuell = _bau_buchung(auszug, tag, monat, jahr, zweck, betrag, explizit, zeile)
             buchungen.append(aktuell)
 
-        elif aktuell is not None and not _ist_kopf_zeile(zeile):
-            # Fortsetzung des Verwendungszwecks oder nachgereichter Betrag.
-            betraege = finde_alle_betraege(zeile)
-            if aktuell.betrag is None and betraege:
-                idx = -2 if (laufend and len(betraege) >= 2) else -1
-                wert, start, _ende, explizit = betraege[idx]
-                aktuell.betrag = wert
-                aktuell.vorzeichen_unsicher = not explizit
-                vor_betrag = zeile[:start].strip()
-                if vor_betrag:
-                    aktuell.verwendungszweck = (aktuell.verwendungszweck + " " + vor_betrag).strip()
-            else:
-                aktuell.verwendungszweck = (aktuell.verwendungszweck + " " + zeile.strip()).strip()
+        elif aktuell is not None and not _ist_kopf_zeile(zeile) and not _ist_carry_zeile(zeile):
+            # NICHT-Buchungszeile: nur Verwendungszweck-Text anhaengen, NIE Betrag.
+            aktuell.verwendungszweck = (aktuell.verwendungszweck + " " + zeile.strip()).strip()
 
-    # Buchungen ohne erkannten Betrag verwerfen (unbrauchbar).
-    return [b for b in buchungen if b.betrag is not None]
+    # Buchungen ohne eigenen Betrag als "betrag_fehlt" melden (nicht in Summe).
+    gueltig: List[Buchung] = []
+    for b in buchungen:
+        if b.betrag is None:
+            auszug.unvollstaendige.append(f"{b.roh_zeile.strip()}  [betrag_fehlt]")
+        else:
+            gueltig.append(b)
+    return gueltig
 
 
 def _betrag_und_zweck(zeile: str, datum_ende: int, laufend: bool):

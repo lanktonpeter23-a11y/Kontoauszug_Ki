@@ -75,6 +75,16 @@ def kontroll_report(auszug: Auszug) -> str:
         )
     else:
         zeilen.append("  ERGEBNIS   : OHNE_SALDO_PRUEFUNG -- kein Saldo lesbar.")
+
+    # Bei Differenz die letzte Luecke sichtbar machen: Buchungszeilen ohne
+    # eigenen Betrag (betrag_fehlt) -- deren fehlender Umsatz erklaert die Diff.
+    if auszug.unvollstaendige:
+        zeilen.append(f"  BETRAG_FEHLT ({len(auszug.unvollstaendige)} Zeile(n) ohne eigenen Betrag,"
+                      f" NICHT in Summe):")
+        for roh in auszug.unvollstaendige[:12]:
+            zeilen.append(f"      - {roh}")
+        if len(auszug.unvollstaendige) > 12:
+            zeilen.append(f"      ... (+{len(auszug.unvollstaendige) - 12} weitere)")
     return "\n".join(zeilen)
 
 

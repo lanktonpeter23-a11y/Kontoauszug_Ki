@@ -107,4 +107,8 @@ class Auszug:
     status: str = STATUS_OHNE_SALDO
     saldo_differenz: float = 0.0    # (saldo_alt + summe) - saldo_neu
 
+    # Buchungszeilen, die einen Datumskopf hatten, aber KEINEN eigenen Betrag
+    # (mit S/H) -> als "betrag_fehlt" gemeldet, NICHT mit Nachbarbetrag gefuellt.
+    unvollstaendige: List[str] = field(default_factory=list)
+
     quelle_pdf: str = ""

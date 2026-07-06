@@ -98,6 +98,44 @@ def test_uebertrag_zeilen_ausgeschlossen():
 
 
 # ---------------------------------------------------------------------------
+# NACHZUG 2 -- Bu-Tag ist Primaerkriterium: Uebertrags-/SPARRATE-Zeilen ohne
+# fuehrendes TT.MM. sind KEINE Buchungen und ihr Betrag darf keiner Buchung
+# zugeordnet werden.
+# ---------------------------------------------------------------------------
+def test_bu_tag_primaer_und_kein_fremdbetrag():
+    print("\n== NACHZUG 2: Bu-Tag-Regel + kein Fremdbetrag (Uebertrag/SPARRATE) ==")
+    # Genau der problematische Zeilenblock aus echtem LIGA-OCR:
+    ocr = (
+        "LIGA BANK eG\nKontoauszug 1/2025\n"
+        "IBAN DE79 7509 0500 0000 1234 56\n"
+        "alter Kontostand vom 30.12.2024        5.712,04 H\n"
+        "02.01. 02.01. LASTSCHRIFT PN:931        52,65 S\n"
+        "Uebertrag auf Blatt 2                   5.659,39 H\n"
+        "Uebertrag von Blatt 1                   5.659,39 H\n"
+        "05.01. 05.01. SPARRATE /*DA-2*                    \n"   # Buchung OHNE eigenen Betrag
+        "        IBAN: DE02 1000 0000 0000 0000 00\n"           # Folgezeile (kein Betrag)
+        "        Referenz 30.12 11.18\n"                         # Folgezeile (kein Betrag)
+        "07.01. 07.01. GEHALT Arbeitgeber       500,00 H\n"
+        "neuer Kontostand vom 31.01.2025        6.159,39 H\n"
+    )
+    # Gueltige Buchungen mit eigenem Betrag: -52,65 und +500,00 = 447,35
+    # 5.712,04 + 447,35 = 6.159,39 == neuer Kontostand -> OK
+    a = parse_auszug(ocr, "liga8.pdf", _PROFILE)
+    pruefe_auszug(a)
+    betraege = sorted(round(b.betrag, 2) for b in a.buchungen)
+
+    check(betraege == [-52.65, 500.0], f"nur eigene Betraege [-52.65, 500] (ist {betraege})")
+    check(all(abs(b.betrag) not in (5659.39, 5712.04, 6159.39) for b in a.buchungen),
+          "kein Uebertrags-/Kontostand-Betrag als Buchung")
+    # SPARRATE ohne Bu-Tag-Betrag darf NICHT den Uebertrag (5.659,39) bekommen
+    check(all(abs(b.betrag) != 5659.39 for b in a.buchungen),
+          "SPARRATE hat NICHT den Uebertragsbetrag uebernommen")
+    check(any("SPARRATE" in u for u in a.unvollstaendige),
+          "SPARRATE als betrag_fehlt gemeldet")
+    check(a.status == STATUS_OK, f"Saldo-Kontrolle OK (Status={a.status}, Diff={a.saldo_differenz})")
+
+
+# ---------------------------------------------------------------------------
 # FIX 3 -- Bank-Erkennung + Jahr
 # ---------------------------------------------------------------------------
 def test_liga_erkennung_und_jahr():
@@ -139,6 +177,7 @@ def test_rollover_regression():
 if __name__ == "__main__":
     test_soll_haben_vorzeichen()
     test_uebertrag_zeilen_ausgeschlossen()
+    test_bu_tag_primaer_und_kein_fremdbetrag()
     test_liga_erkennung_und_jahr()
     test_rollover_regression()
     print("\n" + ("Alle Tests bestanden." if _fehler == 0 else f"{_fehler} FEHLER!"))
