@@ -11,12 +11,16 @@ import os
 from typing import Any, Dict, List
 
 # ---------------------------------------------------------------------------
-# BEDIENKONZEPT: ein einziger Wurf-Ordner
+# BEDIENKONZEPT: ein einziger Wurf-Ordner (zentral, nur HIER definiert)
 # ---------------------------------------------------------------------------
-# Standardpfad auf dem Android-Geraet (Termux, nach `termux-setup-storage`).
+# FIX 5: Standard ist ein Termux-HOME-Pfad, der zuverlaessig les- UND
+# schreibbar ist. /storage/emulated/0/... ist unter Termux (ohne Root und je
+# nach Android-Version) nicht immer beschreibbar. Ueber die Umgebungsvariable
+# KONTOAUSZUEGE_DIR laesst sich der Ordner umbiegen (z.B. auf den geteilten
+# Speicher, wenn gewuenscht).
 BASIS_ORDNER = os.environ.get(
     "KONTOAUSZUEGE_DIR",
-    "/storage/emulated/0/Documents/Kontoauszuege",
+    "/data/data/com.termux/files/home/downloads/Kontoauszuege",
 )
 
 # Ergebnisse landen hier ...
@@ -60,6 +64,7 @@ _LLM_DEFAULTS: Dict[str, Any] = {
     "llm_model": "phi4-mini",                    # Alternative: "qwen3.5:4b"
     "llm_enabled": True,
     "llm_timeout": 60,                            # Sekunden pro Batch-Anfrage
+    "llm_retries": 1,                             # Wiederholungen pro Batch bei Fehler/Timeout
 }
 
 
@@ -80,8 +85,10 @@ def lade_llm_config() -> Dict[str, Any]:
     return werte
 
 
-# So viele Verwendungszwecke pro KI-Anfrage (Batch-Groesse).
-LLM_BATCH = 25
+# So viele Verwendungszwecke pro KI-Anfrage (Batch-Groesse). FIX 4: klein
+# halten -- grosse Batches (z.B. 61 Zwecke auf einmal) lassen kleine lokale
+# Modelle mit 500 antworten. Sequentiell viele kleine Batches sind robuster.
+LLM_BATCH = 10
 
 # ---------------------------------------------------------------------------
 # Bank-Layout-Profile

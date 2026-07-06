@@ -2,6 +2,13 @@
   "_hinweis": "Bank-Layout-Profile. Neue Banken hier OHNE Codeaenderung ergaenzen. Felder je Profil: 'name' (Anzeigename), 'erkennung' (Stichwoerter; taucht eines im OCR-Text auf, greift das Profil), 'saldo_alt'/'saldo_neu' (zusaetzliche Label-Varianten fuer die Saldozeilen), 'laufender_saldo' (optional true/false: hat jede Buchungszeile eine laufende Kontostand-Spalte? Bei true = Umsatz ist der vorletzte Betrag der Zeile). Fehlt ein Feld, gelten die generischen Standardwerte.",
   "profile": [
     {
+      "name": "LIGA BANK",
+      "erkennung": ["liga bank", "liga-bank", "ligabank", "75090500", "7509 0500", "de79 7509 0500"],
+      "saldo_alt": ["alter kontostand", "kontostand vom"],
+      "saldo_neu": ["neuer kontostand"],
+      "laufender_saldo": false
+    },
+    {
       "name": "Sparkasse",
       "erkennung": ["sparkasse", "sparkassen"],
       "saldo_alt": ["alter kontostand", "kontostand alt", "kontostand vom"],

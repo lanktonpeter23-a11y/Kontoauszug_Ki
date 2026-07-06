@@ -45,15 +45,26 @@ def parse_german_amount(token: str) -> Optional[float]:
     m = _AMOUNT_RE.search(token)
     if not m:
         return None
-    return _finalize_amount(m)
+    return _finalize_amount(m)[0]
 
 
-def _finalize_amount(m: "re.Match") -> float:
+def _finalize_amount(m: "re.Match") -> Tuple[float, bool]:
+    """Liefert (wert_mit_vorzeichen, vorzeichen_explizit).
+
+    FIX 1 -- Soll/Haben ist die PRIMAERE Vorzeichenquelle:
+        S = Soll  = Ausgabe  -> negativ
+        H = Haben = Einnahme -> positiv
+    Ebenso zaehlen fuehrendes/nachgestelltes +/- als explizites Vorzeichen.
+    ``vorzeichen_explizit`` ist False, wenn KEIN solches Kennzeichen am Betrag
+    steht -- dann greift beim Aufrufer die Fallback-Heuristik + Markierung.
+    """
     body = m.group("body")
     # Tausenderpunkte weg, Dezimalkomma -> Punkt.
     wert = float(body.replace(".", "").replace(",", "."))
     pre = (m.group("pre") or "").strip()
     post = (m.group("post") or "").strip().upper()
+
+    explizit = pre in ("-", "+") or post in ("-", "+", "S", "H")
 
     negativ = False
     if pre == "-":
@@ -66,28 +77,32 @@ def _finalize_amount(m: "re.Match") -> float:
         negativ = False
     if pre == "+" or post == "+":
         negativ = False
-    return -wert if negativ else wert
+    return (-wert if negativ else wert, explizit)
 
 
-def finde_letzten_betrag(zeile: str) -> Optional[Tuple[float, int, int]]:
+def finde_letzten_betrag(zeile: str) -> Optional[Tuple[float, int, int, bool]]:
     """Findet den RECHTS stehenden Betrag einer Zeile (typ. die Buchungsspalte).
 
-    Gibt (wert_mit_vorzeichen, start, ende) zurueck oder None.
-    Wir nehmen den letzten Treffer, weil der Buchungsbetrag in fast allen
-    Layouts am rechten Zeilenrand steht (davor stehen oft Datum/Zahlen im
-    Verwendungszweck).
+    Gibt (wert_mit_vorzeichen, start, ende, vorzeichen_explizit) zurueck oder
+    None. Wir nehmen den letzten Treffer, weil der Buchungsbetrag in fast
+    allen Layouts am rechten Zeilenrand steht.
     """
     letzte = None
     for m in _AMOUNT_RE.finditer(zeile):
         letzte = m
     if not letzte:
         return None
-    return (_finalize_amount(letzte), letzte.start("body"), letzte.end())
+    wert, explizit = _finalize_amount(letzte)
+    return (wert, letzte.start("body"), letzte.end(), explizit)
 
 
 def finde_alle_betraege(zeile: str):
-    """Alle Betraege einer Zeile (fuer Saldo-Zeilen mit mehreren Zahlen)."""
-    return [(_finalize_amount(m), m.start("body"), m.end()) for m in _AMOUNT_RE.finditer(zeile)]
+    """Alle Betraege einer Zeile als (wert, start, ende, vorzeichen_explizit)."""
+    ergebnis = []
+    for m in _AMOUNT_RE.finditer(zeile):
+        wert, explizit = _finalize_amount(m)
+        ergebnis.append((wert, m.start("body"), m.end(), explizit))
+    return ergebnis
 
 
 # ---------------------------------------------------------------------------

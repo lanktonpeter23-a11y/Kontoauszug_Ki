@@ -72,6 +72,10 @@ class Buchung:
     # Von der Kontrollschicht gesetzt (fuer das Pruefen-Sheet)
     auszug_differenz: float = 0.0   # Saldo-Differenz des Auszugs (nur bei PRUEFEN relevant)
 
+    # True, wenn KEIN S/H- bzw. +/--Kennzeichen lesbar war und das Vorzeichen
+    # nur per Heuristik gesetzt wurde (siehe FIX 1: S/H ist primaere Quelle).
+    vorzeichen_unsicher: bool = False
+
     # Herkunft / Debugging
     quelle_pdf: str = ""            # Dateiname der Ursprungs-PDF
     roh_zeile: str = ""             # Original-OCR-Zeile (fuer Fehlersuche)

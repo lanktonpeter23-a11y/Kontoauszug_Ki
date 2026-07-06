@@ -45,7 +45,8 @@ _RAHMEN = Border(left=_DUENN, right=_DUENN, top=_DUENN, bottom=_DUENN)
 # Reihenfolge der Felder im versteckten Persistenz-Blatt "_Daten".
 _DATEN_SPALTEN = [
     "konto", "datum", "verwendungszweck", "betrag", "status", "kategorie",
-    "typ", "empfaenger", "turnus", "vermerk", "auszug_differenz", "quelle_pdf",
+    "typ", "empfaenger", "turnus", "vermerk", "auszug_differenz",
+    "vorzeichen_unsicher", "quelle_pdf",
 ]
 _DATEN_BLATT = "_Daten"
 
@@ -97,6 +98,7 @@ def _zeile_zu_buchung(row, idx: Dict[str, int]) -> Buchung:
         turnus=str(g("turnus")),
         vermerk=str(g("vermerk")),
         auszug_differenz=float(g("auszug_differenz", 0) or 0),
+        vorzeichen_unsicher=bool(g("vorzeichen_unsicher", False)),
         quelle_pdf=str(g("quelle_pdf")),
     )
 
@@ -359,6 +361,7 @@ def _sheet_daten(wb: Workbook, buchungen: List[Buchung]) -> None:
             "turnus": b.turnus,
             "vermerk": b.vermerk,
             "auszug_differenz": round(b.auszug_differenz, 2),
+            "vorzeichen_unsicher": b.vorzeichen_unsicher,
             "quelle_pdf": b.quelle_pdf,
         }
         for c, name in enumerate(_DATEN_SPALTEN, start=1):

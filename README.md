@@ -20,11 +20,16 @@ Android, aarch64, kein Root).
 ## Bedienkonzept (ein Wurf-Ordner)
 
 ```
-/storage/emulated/0/Documents/Kontoauszuege/      <- HIER PDFs hineinwerfen
+/data/data/com.termux/files/home/downloads/Kontoauszuege/   <- HIER PDFs hineinwerfen
         ├── Auswertung/
         │      └── Finanzanalyse.xlsx              <- Ergebnis (4 Sheets)
         └── verarbeitet/                           <- fertige PDFs (verschoben, nie gelöscht)
 ```
+
+> Dieser Termux-HOME-Pfad ist zuverlässig les- **und** schreibbar. Wer die
+> PDFs lieber im geteilten Speicher ablegt, setzt einfach
+> `export KONTOAUSZUEGE_DIR=/storage/emulated/0/Documents/Kontoauszuege`
+> vor dem Aufruf.
 
 1. Beliebig viele Scan-PDFs (mehrere Monate, mehrere Konten, verschiedene
    Banken gemischt) in den Ordner `Kontoauszuege/` legen.
@@ -199,7 +204,7 @@ Buchungen korrekt erkannt werden, **bevor** in die Excel geschrieben wird.
 |------:|-------|---------|
 | **1 Rendern**   | `render.py` | `pdftoppm` rendert jede Seite mit **300 DPI** zu PNG; Pillow macht Graustufen, Autokontrast, Denoising, Schwellwert → besserer OCR-Input. |
 | **2 OCR**       | `ocr.py` | `tesseract -l deu` extrahiert den Text pro Seite (deterministische Textquelle). |
-| **3 Parsing**   | `statement_parser.py`, `textutils.py` | Regelbasiert (keine KI): IBAN/Kontonummer, Jahr, Buchungen (Datum, Zweck, Betrag mit Vorzeichen), alter/neuer Saldo. Deutsche Betragsformate (`1.234,56`, `1234,56`, `-`, `S`/`H`). **Smart-Year** ergänzt `04.07.` mit dem PDF-Jahr und behandelt Dez→Jan korrekt. |
+| **3 Parsing**   | `statement_parser.py`, `textutils.py` | Regelbasiert (keine KI): IBAN/Kontonummer, Jahr, Buchungen (Datum, Zweck, Betrag), alter/neuer Saldo. **Vorzeichen aus Soll/Haben** (`S`=Ausgabe, `H`=Einnahme) bzw. `+`/`-`. Übertrags-/Kontostandszeilen werden ausgeschlossen. **Smart-Year** ergänzt `04.07.` mit dem PDF-Jahr und behandelt Dez→Jan korrekt. |
 | **4 Kontrolle** | `control.py` | **Herzstück:** `alter Saldo + Summe aller Buchungen == neuer Saldo`? |
 
 **Kontrollschicht-Status:**
@@ -218,7 +223,7 @@ generischer Fallback-Parser greift, wenn kein Profil passt. Ein Profil:
 ```json
 {
   "name": "Meine Bank",
-  "erkennung": ["meine bank", "meinebank eg"],
+  "erkennung": ["meine bank", "meinebank eg", "12345678", "de99 1234 5678"],
   "saldo_alt": ["alter kontostand", "saldovortrag"],
   "saldo_neu": ["neuer kontostand", "endsaldo"],
   "laufender_saldo": false
@@ -226,11 +231,23 @@ generischer Fallback-Parser greift, wenn kein Profil passt. Ein Profil:
 ```
 
 - `erkennung` — taucht eines dieser Stichwörter im OCR-Text auf, greift das
-  Profil.
+  Profil. **Die Bank-Erkennung ist rein deterministisch** (Header-Text,
+  BLZ oder IBAN-Präfix) — nie über die KI. Die Reihenfolge in der Liste
+  entscheidet: das erste passende Profil gewinnt (spezifische Profile wie
+  `LIGA BANK` stehen daher oben).
 - `saldo_alt` / `saldo_neu` — zusätzliche Bezeichnungen der Saldozeilen.
 - `laufender_saldo` — `true`, wenn jede Buchungszeile zusätzlich eine
   laufende Kontostand-Spalte hat (dann ist der Umsatz der vorletzte Betrag
   der Zeile). Ohne Angabe wird es automatisch erkannt.
+
+> **Wichtig:** Ein Profil regelt nur das **Layout** (wo Datum/Betrag/Zweck
+> stehen). Das **Vorzeichen kommt immer aus dem Soll/Haben-Kennzeichen**
+> (`S` = Ausgabe/negativ, `H` = Einnahme/positiv) bzw. `+`/`-` am Betrag —
+> bankübergreifend, nie aus dem Buchungstext geraten und nie über die KI.
+> Fehlt ein S/H-Kennzeichen, greift eine Heuristik und die Buchung wird als
+> *Vorzeichen unsicher* markiert. Auch ohne passendes Profil parst der
+> generische Parser über die S/H-Regel korrekt; Übertrags- und
+> Kontostandszeilen werden immer von den Buchungen ausgeschlossen.
 
 ---
 
@@ -282,7 +299,7 @@ Buchungssatz und dient dem Append-Modus.
 
 | Variable | Standard | Zweck |
 |----------|----------|-------|
-| `KONTOAUSZUEGE_DIR` | `/storage/emulated/0/Documents/Kontoauszuege` | Wurf-Ordner |
+| `KONTOAUSZUEGE_DIR` | `/data/data/com.termux/files/home/downloads/Kontoauszuege` | Wurf-Ordner |
 | `TESSERACT_LANG` | `deu` | OCR-Sprache |
 
 > Das **KI-Backend** wird nicht über Umgebungsvariablen, sondern über
@@ -294,6 +311,7 @@ Buchungssatz und dient dem Append-Modus.
 
 ```bash
 python textutils.py     # prüft die deutsche Betrags-/Datumserkennung
+python test_parser.py   # prüft S/H-Vorzeichen, Übertrags-Ausschluss, Bank/Jahr
 ```
 
 ## Dateien
@@ -313,3 +331,4 @@ python textutils.py     # prüft die deutsche Betrags-/Datumserkennung
 | `excel_export.py` | Excel-Ausgabe (4 Sheets, Append-Modus) |
 | `models.py` | Datenmodelle (`Buchung`, `Auszug`) |
 | `bank_profiles.json` | konfigurierbare Bank-Layout-Profile |
+| `test_parser.py` | Unit-Tests (S/H-Vorzeichen, Übertrags-Ausschluss, Bank/Jahr) |

@@ -38,10 +38,20 @@ _SALDO_NEU_LABELS = [
     "aktueller kontostand", "kontostand aktuell",
 ]
 
-# Saldo-/Summenzeilen: NIE als Buchung werten (auch nicht mit Datum davor).
-_SALDO_SUMMEN_LABELS = _SALDO_ALT_LABELS + _SALDO_NEU_LABELS + [
-    "summe", "zwischensumme", "uebertrag auf", "übertrag auf",
-]
+# FIX 2 -- Uebertrags-/Saldo-Zeilen sind KEINE Buchungen. Sie dienen nur der
+# Saldo-Fortschreibung/Kontrolle und duerfen weder in die Summe noch ins
+# Journal, noch einen Verwendungszweck "verlaengern". OCR-tolerant gematcht
+# (Umlaut/ue/u bei "Uebertrag", Leerzeichen/Bindestrich bei "Kontostand"):
+#   "alter/neuer Kontostand ...", "Kontostand vom ...",
+#   "Uebertrag auf/von/Blatt X" (auch "Übertrag"/"Ubertrag"),
+#   "Summe"/"Zwischensumme".
+_CARRY_RE = re.compile(
+    r"(?:alter|neuer|alte|neue)\s+konto[\s-]*stand"     # alter/neuer Kontostand
+    r"|konto[\s-]*stand\s*(?:vom|alt|neu|am|:)"          # Kontostand vom/alt/neu
+    r"|[uü]e?bertrag"                                    # Übertrag/Uebertrag/Ubertrag
+    r"|\b(?:zwischen)?summe\b",                          # (Zwischen)Summe
+    re.IGNORECASE,
+)
 
 # Reine Kopf-/Fusszeilen: als Verwendungszweck-Fortsetzung ueberspringen.
 # (Wird NUR auf Zeilen OHNE fuehrendes Datum angewandt, damit echte
@@ -54,6 +64,8 @@ _KOPF_LABELS = [
 _IBAN_RE = re.compile(r"\bDE\d{2}(?:[ ]?\d{4}){4}[ ]?\d{2}\b")
 _KONTONR_RE = re.compile(r"(?:konto(?:nummer|-?nr)?\.?\s*:?\s*)(\d{6,12})", re.IGNORECASE)
 _PERIODE_RE = re.compile(r"vom\s+\d{1,2}\.\d{1,2}\.(\d{4})")
+# Auszugsnummer inkl. Jahr im Kopf, z.B. "Kontoauszug 1/2025", "Auszug Nr. 3/2025".
+_AUSZUG_JAHR_RE = re.compile(r"(?:kontoauszug|auszug)[^\n]*?\b\d{1,2}\s*/\s*(20\d{2})\b", re.IGNORECASE)
 
 
 def parse_auszug(ocr_text: str, quelle_pdf: str, profile: List[Dict[str, Any]]) -> Auszug:
@@ -108,13 +120,29 @@ def _finde_konto(text: str, profil: Optional[Dict[str, Any]]) -> str:
 
 
 def _finde_jahr(text: str) -> Optional[int]:
-    """Basisjahr: bevorzugt aus Zeitraum 'vom TT.MM.JJJJ', sonst erste
-    Volljahreszahl im Kopf."""
-    m = _PERIODE_RE.search(text)
+    """Basisjahr des Auszugs bestimmen.
+
+    Reihenfolge:
+      1. Auszugsnummer mit Jahr im Kopf ("Kontoauszug 1/2025").
+      2. Zeitraum "vom TT.MM.JJJJ" -- ABER nicht die "Kontostand vom ..."-
+         bzw. "Saldo"-Zeile (die traegt das VORJAHRES-Datum des alten
+         Kontostandes und wuerde die Buchungen faelschlich ins Vorjahr legen).
+      3. erste Volljahreszahl im Text.
+    """
+    m = _AUSZUG_JAHR_RE.search(text)
     if m:
         j = int(m.group(1))
         if 1990 <= j <= 2100:
             return j
+
+    for m in _PERIODE_RE.finditer(text):
+        vor = text[max(0, m.start() - 16):m.start()].lower()
+        if "kontostand" in vor or "saldo" in vor:
+            continue                       # "alter Kontostand vom ..." ignorieren
+        j = int(m.group(1))
+        if 1990 <= j <= 2100:
+            return j
+
     return finde_erstes_volljahr(text)
 
 
@@ -133,10 +161,17 @@ def _finde_saldo(text: str, labels: List[str]) -> Optional[float]:
 # ---------------------------------------------------------------------------
 # Buchungen
 # ---------------------------------------------------------------------------
-def _ist_saldo_summen_zeile(zeile: str) -> bool:
-    """Saldo-/Summenzeile -> nie eine Buchung, auch mit Datum davor."""
+def _ist_carry_zeile(zeile: str) -> bool:
+    """Uebertrags-/Saldo-/Summenzeile -> nie Buchung, nie Zweck-Fortsetzung.
+
+    Deckt sowohl die OCR-tolerante Regex (_CARRY_RE: Kontostand/Uebertrag/
+    Summe) als auch alle konfigurierten Saldo-Labels (alter/neuer Saldo,
+    Saldovortrag, Endsaldo, ...) ab.
+    """
+    if _CARRY_RE.search(zeile):
+        return True
     zl = zeile.lower()
-    return any(lab in zl for lab in _SALDO_SUMMEN_LABELS)
+    return any(lab in zl for lab in _SALDO_ALT_LABELS + _SALDO_NEU_LABELS)
 
 
 def _ist_kopf_zeile(zeile: str) -> bool:
@@ -170,11 +205,11 @@ def _parse_buchungen(text: str, auszug: Auszug, profil: Optional[Dict[str, Any]]
     """
     zeilen = [z for z in text.splitlines() if z.strip()]
 
-    # Erst Kandidaten-Zeilen (mit fuehrendem Datum, keine Saldo/Kopf-Zeilen)
+    # Erst Kandidaten-Zeilen (mit fuehrendem Datum, keine Carry-Zeilen)
     # bestimmen, um das Layout (laufender Saldo?) zu erkennen.
     kandidaten = [
         z for z in zeilen
-        if finde_datum_am_anfang(z) and not _ist_saldo_summen_zeile(z)
+        if finde_datum_am_anfang(z) and not _ist_carry_zeile(z)
     ]
     laufend = _laufender_saldo_layout(kandidaten, profil)
 
@@ -182,23 +217,29 @@ def _parse_buchungen(text: str, auszug: Auszug, profil: Optional[Dict[str, Any]]
     aktuell: Optional[Buchung] = None
 
     for zeile in zeilen:
+        # FIX 2: Uebertrags-/Kontostand-/Summenzeilen komplett ignorieren --
+        # weder neue Buchung, noch Betrag-Nachreichung, noch Zweck-Fortsetzung.
+        if _ist_carry_zeile(zeile):
+            continue
+
         datum_info = finde_datum_am_anfang(zeile)
 
-        if datum_info and not _ist_saldo_summen_zeile(zeile):
+        if datum_info:
             # Neue Buchung beginnt hier (Betrag darf None sein -> folgt spaeter).
             tag, monat, jahr, ende = datum_info
-            betrag, zweck = _betrag_und_zweck(zeile, ende, laufend)
-            aktuell = _bau_buchung(auszug, tag, monat, jahr, zweck, betrag, zeile)
+            betrag, zweck, explizit = _betrag_und_zweck(zeile, ende, laufend)
+            aktuell = _bau_buchung(auszug, tag, monat, jahr, zweck, betrag, explizit, zeile)
             buchungen.append(aktuell)
 
-        elif aktuell is not None and not _ist_kopf_zeile(zeile) \
-                and not _ist_saldo_summen_zeile(zeile):
+        elif aktuell is not None and not _ist_kopf_zeile(zeile):
             # Fortsetzung des Verwendungszwecks oder nachgereichter Betrag.
             betraege = finde_alle_betraege(zeile)
             if aktuell.betrag is None and betraege:
                 idx = -2 if (laufend and len(betraege) >= 2) else -1
-                aktuell.betrag = betraege[idx][0]
-                vor_betrag = zeile[: betraege[idx][1]].strip()
+                wert, start, _ende, explizit = betraege[idx]
+                aktuell.betrag = wert
+                aktuell.vorzeichen_unsicher = not explizit
+                vor_betrag = zeile[:start].strip()
                 if vor_betrag:
                     aktuell.verwendungszweck = (aktuell.verwendungszweck + " " + vor_betrag).strip()
             else:
@@ -209,24 +250,31 @@ def _parse_buchungen(text: str, auszug: Auszug, profil: Optional[Dict[str, Any]]
 
 
 def _betrag_und_zweck(zeile: str, datum_ende: int, laufend: bool):
-    """Extrahiert (Betrag, Zweck) aus einer Buchungszeile ab Datum-Ende."""
+    """Extrahiert (Betrag, Zweck, vorzeichen_explizit) ab Datum-Ende.
+
+    FIX 1: Das Vorzeichen stammt aus dem S/H- bzw. +/--Kennzeichen am Betrag
+    (in ``finde_alle_betraege`` bereits ausgewertet). ``explizit=False``
+    bedeutet, dass kein solches Kennzeichen lesbar war.
+    """
     betraege = finde_alle_betraege(zeile)
     if not betraege:
-        return None, zeile[datum_ende:].strip()
+        return None, zeile[datum_ende:].strip(), False
     idx = -2 if (laufend and len(betraege) >= 2) else -1
-    betrag, start, _ = betraege[idx]
+    betrag, start, _ende, explizit = betraege[idx]
     zweck = zeile[datum_ende:start].strip()
     # Fuehrende zweite Datumsangabe (Wertstellung) aus dem Zweck entfernen.
     zweck = re.sub(r"^\d{1,2}\.\d{1,2}\.(\d{2,4})?\s*", "", zweck).strip()
-    return betrag, zweck
+    return betrag, zweck, explizit
 
 
-def _bau_buchung(auszug: Auszug, tag, monat, jahr, zweck, betrag, roh) -> Buchung:
+def _bau_buchung(auszug: Auszug, tag, monat, jahr, zweck, betrag, explizit, roh) -> Buchung:
     b = Buchung(
         konto=auszug.konto,
         datum=None,
         verwendungszweck=zweck,
         betrag=betrag,
+        # FIX 1: unsicher, wenn ein Betrag ohne S/H- bzw. +/--Kennzeichen kam.
+        vorzeichen_unsicher=(betrag is not None and not explizit),
         quelle_pdf=auszug.quelle_pdf,
         roh_zeile=roh.strip(),
     )

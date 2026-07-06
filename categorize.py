@@ -57,11 +57,13 @@ class LLMClient:
     Einzige oeffentliche Methode: :meth:`categorize`.
     """
 
-    def __init__(self, base_url: str, model: str, enabled: bool, timeout: int):
+    def __init__(self, base_url: str, model: str, enabled: bool, timeout: int,
+                 retries: int = 1):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.enabled = bool(enabled)
         self.timeout = int(timeout)
+        self.retries = max(0, int(retries))     # Wiederholungen pro Batch
 
     # -- Fabrik aus config.json ---------------------------------------------
     @classmethod
@@ -72,6 +74,7 @@ class LLMClient:
             model=cfg["llm_model"],
             enabled=cfg["llm_enabled"],
             timeout=cfg["llm_timeout"],
+            retries=cfg.get("llm_retries", 1),
         )
 
     # -- oeffentliche API ---------------------------------------------------
@@ -97,17 +100,38 @@ class LLMClient:
                   f"-> alle 'unkategorisiert'.")
             return ergebnis
 
+        # FIX 4: in kleine Batches stueckeln und SEQUENTIELL senden. Scheitert
+        # ein Batch (auch nach Retries), bleiben nur DESSEN Zwecke
+        # "unkategorisiert" -- kein Gesamt-Abbruch.
+        batches = [
+            verwendungszwecke[i:i + config.LLM_BATCH]
+            for i in range(0, len(verwendungszwecke), config.LLM_BATCH)
+        ]
+        anzahl = len(batches)
         print(f"  [KI] Kategorisiere {len(verwendungszwecke)} eindeutige "
-              f"Verwendungszwecke ({self.model} @ {self.base_url}) ...")
+              f"Verwendungszwecke in {anzahl} Batch(es) "
+              f"({self.model} @ {self.base_url}) ...")
 
-        for start in range(0, len(verwendungszwecke), config.LLM_BATCH):
-            batch = verwendungszwecke[start:start + config.LLM_BATCH]
+        for nr, batch in enumerate(batches, start=1):
             try:
-                ergebnis.update(self._frage_batch(batch))
+                ergebnis.update(self._frage_batch_mit_retry(batch))
+                print(f"    [KI] Batch {nr}/{anzahl} ok")
             except Exception as exc:  # noqa: BLE001 - Batch faellt auf unkategorisiert
-                print(f"    [KI] Batch ab #{start} fehlgeschlagen ({exc}) "
-                      f"-> unkategorisiert.")
+                print(f"    [KI] Batch {nr}/{anzahl} fehlgeschlagen ({exc}) "
+                      f"-> {len(batch)}x unkategorisiert.")
         return ergebnis
+
+    def _frage_batch_mit_retry(self, batch: List[str]) -> Dict[str, str]:
+        """Ein Batch mit bis zu (1 + retries) Versuchen; Timeout aus config."""
+        letzter_fehler: Exception = RuntimeError("unbekannt")
+        for versuch in range(self.retries + 1):
+            try:
+                return self._frage_batch(batch)
+            except Exception as exc:  # noqa: BLE001
+                letzter_fehler = exc
+                if versuch < self.retries:
+                    print(f"      [KI] Wiederhole Batch (Versuch {versuch + 2}) ...")
+        raise letzter_fehler
 
     # -- interne Helfer -----------------------------------------------------
     def _erreichbar(self) -> bool:

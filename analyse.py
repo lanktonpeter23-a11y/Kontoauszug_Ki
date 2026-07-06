@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Kontoauszug-KI -- lokale Analyse eingescannter deutscher Kontoauszuege.
 
-Ein Aufruf verarbeitet ALLE PDFs im Wurf-Ordner
-    /storage/emulated/0/Documents/Kontoauszuege/
+Ein Aufruf verarbeitet ALLE PDFs im Wurf-Ordner (Standard:
+    /data/data/com.termux/files/home/downloads/Kontoauszuege/ ,
+zentral in config.BASIS_ORDNER, per KONTOAUSZUEGE_DIR umstellbar)
 und erzeugt eine Excel-Auswertung in .../Auswertung/Finanzanalyse.xlsx.
 Verarbeitete PDFs werden nach .../verarbeitet/ verschoben (nie geloescht).
 
