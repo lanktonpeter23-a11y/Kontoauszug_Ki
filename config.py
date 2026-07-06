@@ -45,14 +45,43 @@ TESSERACT_LANG = os.environ.get("TESSERACT_LANG", "deu")   # deutsches Sprachpak
 TESSERACT_CONFIG = os.environ.get("TESSERACT_CONFIG", "--psm 6 --oem 1")
 
 # ---------------------------------------------------------------------------
-# LOKALE KI (nur Kategorisierung) -- Ollama
+# LOKALE KI (nur Kategorisierung) -- OpenAI-kompatibler Chat-Server
 # ---------------------------------------------------------------------------
-OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
-# Modell als Konfig-Konstante. Default klein & schnell fuer's Handy.
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "phi4-mini")
-# Alternative (falls installiert):  OLLAMA_MODEL = "qwen3.5:4b"
-OLLAMA_TIMEOUT = 120            # Sekunden pro Batch-Anfrage
-OLLAMA_BATCH = 25              # so viele Verwendungszwecke pro KI-Anfrage
+# Das KI-Backend ist KONFIGURATION, nicht Code: alle Einstellungen kommen aus
+# config.json (neben diesem Skript). Der LLMClient spricht ausschliesslich die
+# OpenAI-kompatible Chat-API ({base_url}/v1/chat/completions), die Ollama,
+# llama.cpp --server und MLC serve nativ bedienen. So laesst sich das Backend
+# ohne Codeaenderung tauschen -- nur base_url + model in config.json aendern.
+_CONFIG_DATEI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+
+# Standardwerte (greifen, falls config.json fehlt oder Schluessel fehlen).
+_LLM_DEFAULTS: Dict[str, Any] = {
+    "llm_base_url": "http://127.0.0.1:11434",   # Ollama-Standard; llama.cpp: :8080
+    "llm_model": "phi4-mini",                    # Alternative: "qwen3.5:4b"
+    "llm_enabled": True,
+    "llm_timeout": 60,                            # Sekunden pro Batch-Anfrage
+}
+
+
+def lade_llm_config() -> Dict[str, Any]:
+    """Laedt die KI-Konfiguration aus config.json (mit Defaults als Fallback)."""
+    werte = dict(_LLM_DEFAULTS)
+    try:
+        with open(_CONFIG_DATEI, "r", encoding="utf-8") as fh:
+            daten = json.load(fh)
+        if isinstance(daten, dict):
+            for key in _LLM_DEFAULTS:
+                if key in daten:
+                    werte[key] = daten[key]
+    except FileNotFoundError:
+        print("  [WARN] config.json nicht gefunden -> LLM-Standardwerte.")
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"  [WARN] config.json fehlerhaft ({exc}) -> LLM-Standardwerte.")
+    return werte
+
+
+# So viele Verwendungszwecke pro KI-Anfrage (Batch-Groesse).
+LLM_BATCH = 25
 
 # ---------------------------------------------------------------------------
 # Bank-Layout-Profile

@@ -6,7 +6,8 @@ Bank-Kontoauszüge** (PDF, mehrere Banken/Konten, verschiedene Layouts) und
 erzeugt eine **Excel-Auswertung**.
 
 - **Keine Cloud, keine Datenübertragung.** OCR, Parsing und Kontrolle laufen
-  auf dem Gerät. Die (optionale) KI läuft ebenfalls lokal über Ollama.
+  auf dem Gerät. Die (optionale) KI läuft ebenfalls lokal über einen
+  OpenAI-kompatiblen Server (z. B. Ollama, llama.cpp, MLC).
 - **Beträge, Daten und Salden gehen NIE durch die KI** — nur die reinen
   Verwendungszweck-Texte werden (falls Ollama läuft) zur Kategorisierung
   genutzt.
@@ -108,7 +109,7 @@ pip install Pillow openpyxl requests
 
 - `Pillow`   — Bildvorverarbeitung (Graustufen/Kontrast/Denoising)
 - `openpyxl` — Excel-Ausgabe (`.xlsx`)
-- `requests` — Kommunikation mit der optionalen Ollama-KI
+- `requests` — Kommunikation mit dem optionalen KI-Server (OpenAI-kompatibel)
 
 > **`pandas` wird NICHT benötigt.** Das Tool kommt komplett mit `openpyxl`
 > aus. Das ist Absicht, damit auf aarch64 keine Kompilierprobleme
@@ -124,13 +125,16 @@ python analyse.py
 
 ---
 
-## Optional: lokale KI-Kategorisierung (Ollama)
+## Optional: lokale KI-Kategorisierung
 
 Die KI ordnet den Buchungen nur eine **Kategorie** zu
 (Fixkosten / Lebenshaltung / Tanken / Sonstiges / Umbuchung). **Das Tool
-läuft auch komplett OHNE Ollama** — dann bleiben die Buchungen
+läuft auch komplett OHNE KI** — dann bleiben die Buchungen
 `unkategorisiert`, alle anderen Ergebnisse (Journal, Salden-Kontrolle,
-Prüfen-Sheet) sind vollständig vorhanden.
+Prüfen-Sheet) sind vollständig vorhanden. Beträge, Daten und Salden gehen
+**nie** durch die KI.
+
+Beispiel mit **Ollama** (Standard-Backend):
 
 ```bash
 pkg install ollama
@@ -139,14 +143,40 @@ ollama pull phi4-mini          # Standard-Modell laden
 python analyse.py
 ```
 
-- Standard-Modell: **`phi4-mini`** (klein & schnell für's Handy).
-- Alternative (in `config.py` als Kommentar hinterlegt): **`qwen3.5:4b`**.
-- Modell/Adresse sind in `config.py` als Konstanten einstellbar
-  (`OLLAMA_MODEL`, `OLLAMA_URL`) oder per Umgebungsvariable.
+Die KI wird ausschließlich über **`config.json`** (neben dem Skript)
+gesteuert:
 
-> Ist Ollama nicht erreichbar oder liefert kaputtes JSON, fällt das Tool
-> automatisch auf `unkategorisiert` zurück und läuft trotzdem vollständig
-> durch (*graceful degradation*).
+```json
+{
+  "llm_base_url": "http://127.0.0.1:11434",
+  "llm_model": "phi4-mini",
+  "llm_enabled": true,
+  "llm_timeout": 60
+}
+```
+
+- `llm_base_url` — Adresse des lokalen Servers (Ollama-Standard `:11434`).
+- `llm_model` — Modellname (Alternative z. B. `qwen3.5:4b`).
+- `llm_enabled` — `false` schaltet die KI komplett ab (alles bleibt
+  `unkategorisiert`).
+- `llm_timeout` — Sekunden pro Anfrage.
+
+> Ist der Server nicht erreichbar, `llm_enabled=false` gesetzt oder liefert er
+> kaputtes JSON, fällt das Tool automatisch auf `unkategorisiert` zurück und
+> läuft trotzdem vollständig durch (*graceful degradation*).
+
+### KI-Backend wechseln
+
+Das KI-Backend ist **Konfiguration, nicht Code**. Alle LLM-Aufrufe stecken in
+einer einzigen Klasse `LLMClient`, die ausschließlich die **OpenAI-kompatible
+Chat-API** (`POST {llm_base_url}/v1/chat/completions`) spricht — dasselbe
+Format, das **Ollama**, **llama.cpp** (`llama-server`) und **MLC**
+(`mlc_llm serve`) nativ bedienen. Um das Backend zu tauschen, genügt es,
+`llm_base_url` und `llm_model` in `config.json` anzupassen — es ist **keine
+Codeänderung** nötig. Beispiele: `http://127.0.0.1:11434` (Ollama),
+`http://127.0.0.1:8080` (llama.cpp `--server`), oder der Port des
+MLC-Servers. Der Client prüft die Erreichbarkeit über `/v1/models` und
+nutzt keine anbieter-spezifischen Endpunkte.
 
 ---
 
@@ -254,8 +284,9 @@ Buchungssatz und dient dem Append-Modus.
 |----------|----------|-------|
 | `KONTOAUSZUEGE_DIR` | `/storage/emulated/0/Documents/Kontoauszuege` | Wurf-Ordner |
 | `TESSERACT_LANG` | `deu` | OCR-Sprache |
-| `OLLAMA_MODEL` | `phi4-mini` | KI-Modell |
-| `OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama-Adresse |
+
+> Das **KI-Backend** wird nicht über Umgebungsvariablen, sondern über
+> `config.json` konfiguriert (siehe Abschnitt *KI-Backend wechseln*).
 
 ---
 
@@ -270,13 +301,14 @@ python textutils.py     # prüft die deutsche Betrags-/Datumserkennung
 | Datei | Inhalt |
 |-------|--------|
 | `analyse.py` | Hauptprogramm / Orchestrierung + CLI (`--dry-run`) |
-| `config.py` | Pfade & Konstanten, Laden der Bank-Profile |
+| `config.py` | Pfade & Konstanten, Laden von Bank-Profilen und `config.json` |
+| `config.json` | KI-Backend-Konfiguration (base_url, model, enabled, timeout) |
 | `render.py` | Ebene 1 — Rendern + Bildvorverarbeitung |
 | `ocr.py` | Ebene 2 — Tesseract-OCR |
 | `statement_parser.py` | Ebene 3 — regelbasiertes Parsing + Smart-Year |
 | `textutils.py` | deutsche Betrags-/Datumserkennung (+ Selbsttest) |
 | `control.py` | Ebene 4 — Saldo-Kontrollschicht |
-| `categorize.py` | lokale KI (Ollama) — nur Kategorien |
+| `categorize.py` | `LLMClient` — austauschbares KI-Backend (OpenAI-kompatibel), nur Kategorien |
 | `turnus.py` | Turnus- & Preiserhöhungs-Berechnung (Python) |
 | `excel_export.py` | Excel-Ausgabe (4 Sheets, Append-Modus) |
 | `models.py` | Datenmodelle (`Buchung`, `Auszug`) |

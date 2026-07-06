@@ -1,0 +1,6 @@
+{
+  "llm_base_url": "http://127.0.0.1:11434",
+  "llm_model": "phi4-mini",
+  "llm_enabled": true,
+  "llm_timeout": 60
+}

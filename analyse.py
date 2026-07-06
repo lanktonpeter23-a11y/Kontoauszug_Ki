@@ -30,7 +30,7 @@ from typing import List
 
 import config
 import excel_export
-from categorize import kategorisiere
+from categorize import LLMClient
 from control import kontroll_report, pruefe_auszug
 from models import (
     KAT_UMBUCHUNG,
@@ -95,7 +95,8 @@ def kategorisiere_und_bereite_auf(buchungen: List[Buchung]) -> None:
     # Nur die noch nicht kategorisierten, EINDEUTIGEN Zwecke an die KI geben.
     offen = [b for b in buchungen if b.kategorie in ("", KAT_UNKATEGORISIERT)]
     eindeutige = sorted({b.verwendungszweck for b in offen if b.verwendungszweck.strip()})
-    zuordnung = kategorisiere(eindeutige)
+    # KI-Backend ist Konfiguration (config.json) -> austauschbarer LLMClient.
+    zuordnung = LLMClient.from_config().categorize(eindeutige)
 
     for b in offen:
         b.kategorie = zuordnung.get(b.verwendungszweck, KAT_UNKATEGORISIERT)
