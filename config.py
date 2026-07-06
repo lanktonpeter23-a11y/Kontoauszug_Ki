@@ -1,0 +1,81 @@
+"""Zentrale Konfiguration + Laden der Bank-Layout-Profile.
+
+Hier stehen alle Pfade und Konstanten an EINER Stelle, damit sie leicht
+angepasst werden koennen (z.B. wenn der Wurf-Ordner woanders liegt).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from typing import Any, Dict, List
+
+# ---------------------------------------------------------------------------
+# BEDIENKONZEPT: ein einziger Wurf-Ordner
+# ---------------------------------------------------------------------------
+# Standardpfad auf dem Android-Geraet (Termux, nach `termux-setup-storage`).
+BASIS_ORDNER = os.environ.get(
+    "KONTOAUSZUEGE_DIR",
+    "/storage/emulated/0/Documents/Kontoauszuege",
+)
+
+# Ergebnisse landen hier ...
+AUSWERTUNG_ORDNER = os.path.join(BASIS_ORDNER, "Auswertung")
+# ... verarbeitete PDFs werden hierhin VERSCHOBEN (nie geloescht) ...
+VERARBEITET_ORDNER = os.path.join(BASIS_ORDNER, "verarbeitet")
+# ... und die eine Excel-Datei heisst:
+EXCEL_DATEI = os.path.join(AUSWERTUNG_ORDNER, "Finanzanalyse.xlsx")
+
+# Temporaerer Ordner fuer gerenderte Seitenbilder (wird pro Lauf geleert).
+TEMP_ORDNER = os.path.join(AUSWERTUNG_ORDNER, ".tmp_render")
+
+# ---------------------------------------------------------------------------
+# EBENE 1 -- Rendern
+# ---------------------------------------------------------------------------
+DPI = 300                       # Aufloesung fuer pdftoppm (guter OCR-Input)
+PDFTOPPM_BIN = os.environ.get("PDFTOPPM_BIN", "pdftoppm")
+
+# ---------------------------------------------------------------------------
+# EBENE 2 -- OCR (tesseract)
+# ---------------------------------------------------------------------------
+TESSERACT_BIN = os.environ.get("TESSERACT_BIN", "tesseract")
+TESSERACT_LANG = os.environ.get("TESSERACT_LANG", "deu")   # deutsches Sprachpaket
+# --psm 6 = "Assume a single uniform block of text" -- passt gut fuer
+# tabellarische Kontoauszuege. --oem 1 = LSTM (Standard in tesseract 5).
+TESSERACT_CONFIG = os.environ.get("TESSERACT_CONFIG", "--psm 6 --oem 1")
+
+# ---------------------------------------------------------------------------
+# LOKALE KI (nur Kategorisierung) -- Ollama
+# ---------------------------------------------------------------------------
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
+# Modell als Konfig-Konstante. Default klein & schnell fuer's Handy.
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "phi4-mini")
+# Alternative (falls installiert):  OLLAMA_MODEL = "qwen3.5:4b"
+OLLAMA_TIMEOUT = 120            # Sekunden pro Batch-Anfrage
+OLLAMA_BATCH = 25              # so viele Verwendungszwecke pro KI-Anfrage
+
+# ---------------------------------------------------------------------------
+# Bank-Layout-Profile
+# ---------------------------------------------------------------------------
+_PROFIL_DATEI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bank_profiles.json")
+
+
+def lade_bank_profile() -> List[Dict[str, Any]]:
+    """Laedt die konfigurierbaren Bank-Muster-Profile aus bank_profiles.json.
+
+    Neue Banken koennen dort OHNE Codeaenderung ergaenzt werden.
+    Faellt bei Fehler auf eine leere Liste zurueck -> generischer Parser
+    uebernimmt dann alles.
+    """
+    try:
+        with open(_PROFIL_DATEI, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        if isinstance(data, dict) and "profile" in data:
+            return data["profile"]
+        if isinstance(data, list):
+            return data
+    except FileNotFoundError:
+        print("  [WARN] bank_profiles.json nicht gefunden -> nur generischer Parser.")
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"  [WARN] bank_profiles.json fehlerhaft ({exc}) -> nur generischer Parser.")
+    return []

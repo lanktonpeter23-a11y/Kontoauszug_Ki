@@ -1,0 +1,54 @@
+{
+  "_hinweis": "Bank-Layout-Profile. Neue Banken hier OHNE Codeaenderung ergaenzen. Felder je Profil: 'name' (Anzeigename), 'erkennung' (Stichwoerter; taucht eines im OCR-Text auf, greift das Profil), 'saldo_alt'/'saldo_neu' (zusaetzliche Label-Varianten fuer die Saldozeilen), 'laufender_saldo' (optional true/false: hat jede Buchungszeile eine laufende Kontostand-Spalte? Bei true = Umsatz ist der vorletzte Betrag der Zeile). Fehlt ein Feld, gelten die generischen Standardwerte.",
+  "profile": [
+    {
+      "name": "Sparkasse",
+      "erkennung": ["sparkasse", "sparkassen"],
+      "saldo_alt": ["alter kontostand", "kontostand alt", "kontostand vom"],
+      "saldo_neu": ["neuer kontostand", "kontostand neu"],
+      "laufender_saldo": false
+    },
+    {
+      "name": "Volksbank/Raiffeisen",
+      "erkennung": ["volksbank", "raiffeisen", "vr-bank", "vr bank", "genossenschaft"],
+      "saldo_alt": ["alter kontostand", "saldovortrag", "vortrag"],
+      "saldo_neu": ["neuer kontostand", "endsaldo"],
+      "laufender_saldo": false
+    },
+    {
+      "name": "DKB",
+      "erkennung": ["dkb", "deutsche kreditbank"],
+      "saldo_alt": ["alter kontostand", "kontostand alt"],
+      "saldo_neu": ["neuer kontostand", "kontostand neu"],
+      "laufender_saldo": false
+    },
+    {
+      "name": "ING",
+      "erkennung": ["ing-diba", "ing diba", "ing "],
+      "saldo_alt": ["alter saldo", "alter kontostand"],
+      "saldo_neu": ["neuer saldo", "neuer kontostand"],
+      "laufender_saldo": false
+    },
+    {
+      "name": "Commerzbank",
+      "erkennung": ["commerzbank", "comdirect"],
+      "saldo_alt": ["alter kontostand", "anfangssaldo"],
+      "saldo_neu": ["neuer kontostand", "endsaldo"],
+      "laufender_saldo": false
+    },
+    {
+      "name": "Deutsche Bank",
+      "erkennung": ["deutsche bank"],
+      "saldo_alt": ["alter kontostand", "saldo vortrag"],
+      "saldo_neu": ["neuer kontostand", "endsaldo"],
+      "laufender_saldo": false
+    },
+    {
+      "name": "Postbank",
+      "erkennung": ["postbank"],
+      "saldo_alt": ["alter kontostand", "kontostand alt"],
+      "saldo_neu": ["neuer kontostand", "kontostand neu"],
+      "laufender_saldo": false
+    }
+  ]
+}
