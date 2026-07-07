@@ -86,21 +86,19 @@ def test_c_art():
 
 
 def test_d_wiederkehrer():
-    print("\n== d) Wiederkehrer ==")
+    print("\n== d) Wiederkehrer: >=3 monatlich -> SICHER; 2x faellt raus ==")
     drei = [Buchung(konto="X", datum=d, verwendungszweck="LASTSCHRIFT PN:931 Netflix Europe",
                     betrag=-12.99)
             for d in (date(2025, 1, 5), date(2025, 2, 4), date(2025, 3, 6))]
-    # Miete: Dauerauftrag mit stabiler Referenz (2x -> ueber Referenz-Pfad).
-    zwei = [Buchung(konto="X", datum=d, verwendungszweck="EURO-UEBERWEISUNG PN:900 Miete Verwaltung",
-                    betrag=-800.0, mandatsref="MIETE-DA-4711")
+    zwei = [Buchung(konto="X", datum=d, verwendungszweck="LASTSCHRIFT PN:931 Fitness Studio",
+                    betrag=-29.99)
             for d in (date(2025, 1, 2), date(2025, 2, 2))]
-    res = {g.schluessel: g for g in finde_wiederkehrer(drei + zwei)}
-    net = next((g for k, g in res.items() if "netflix" in k), None)
-    mie = next((g for k, g in res.items() if "miete" in k), None)
+    res = finde_wiederkehrer(drei + zwei)
+    net = next((g for g in res if "netflix" in g.schluessel), None)
     check(net is not None and net.klassifikation == "SICHER" and net.turnus == "monatlich",
-          f"3x ~30 Tage -> SICHER/monatlich ({net.klassifikation}/{net.turnus if net else '-'})")
-    check(mie is not None and mie.klassifikation == "WAHRSCHEINLICH",
-          f"2x -> WAHRSCHEINLICH ({mie.klassifikation if mie else '-'})")
+          f"Netflix 3x -> SICHER/monatlich ({net.klassifikation if net else '-'})")
+    check(not any("fitness" in g.schluessel for g in res),
+          "2-Vorkommen-Gruppe faellt raus (>=3 noetig)")
 
 
 def test_e_excel_input():
@@ -214,9 +212,10 @@ def _b(datum, betrag, empf, mref="", zweck=""):
 
 def test_i_gruppierung_kaskade():
     print("\n== i) Gruppierung: Referenz-Kaskade, Betrag nie harter Schluessel ==")
-    # AXA: gleiche MREF, Betrag 6,84 vs 7,00 -> EINE Gruppe
-    axa = [_b(date(2025, 1, 2), -6.84, "AXA Versicherung Aktiengesellschaft", "21052299391"),
-           _b(date(2025, 2, 2), -7.00, "AXA Versicherung Aktiengesellschaft", "21052299391")]
+    # AXA: gleiche MREF, wechselnder Betrag, monatlich (>=3) -> EINE Gruppe
+    axa = [_b(d, x, "AXA Versicherung Aktiengesellschaft", "21052299391")
+           for d, x in ((date(2025, 1, 2), -6.84), (date(2025, 2, 2), -7.00),
+                        (date(2025, 3, 2), -6.84))]
     # Vattenfall: variabler Betrag, gleiche MREF, monatlich -> EINE Gruppe
     vat = [_b(d, x, "Vattenfall Europe Sales", "M002000003885551")
            for d, x in ((date(2025, 1, 8), -86.0), (date(2025, 2, 8), -92.5), (date(2025, 3, 8), -79.9))]
@@ -253,19 +252,21 @@ def test_k_name_in_allen_feldern():
           f"kein Klarname in irgendeinem Feld ({blob})")
 
 
-def test_l_verschiedene_personen():
-    print("\n== l) Verschiedene Personen -> verschiedene, unterscheidbare Gruppen ==")
-    p1 = [_b(d, -100.0, "Anna Schmidt", "",
-             "EURO-UEBERWEISUNG PN:801 Anna Schmidt Miete IBAN: DE11111111111111111111")
+def test_l_personen_nicht_im_sheet():
+    print("\n== l) Personen-Empfaenger -> nicht im Wiederkehrend-Sheet ==")
+    from anonymisierung import ist_identifizierbar
+    p1 = [_b(d, -100.0, "Anna Schmidt", "", "EURO-UEBERWEISUNG PN:801 Anna Schmidt Miete")
           for d in (date(2025, 1, 2), date(2025, 2, 2), date(2025, 3, 2))]
-    p2 = [_b(d, -50.0, "Bernd Mueller", "",
-             "EURO-UEBERWEISUNG PN:801 Bernd Mueller Sparen IBAN: DE22222222222222222222")
+    p2 = [_b(d, -50.0, "Bernd Mueller", "", "EURO-UEBERWEISUNG PN:801 Bernd Mueller Sparen")
           for d in (date(2025, 1, 5), date(2025, 2, 5), date(2025, 3, 5))]
-    g = anonymisiere_wiederkehrer(finde_wiederkehrer(p1 + p2))
-    check(len(g) == 2, f"zwei Personen -> zwei Gruppen, kein Sammeltopf ({len(g)})")
-    check(len({x.empfaenger for x in g}) == 2, "Gruppen bleiben unterscheidbar (Anker)")
-    check(all("Schmidt" not in x.empfaenger and "Mueller" not in x.empfaenger for x in g),
-          "kein Klarname im Wiederkehrend-Empfaenger")
+    axa = [_b(d, -6.84, "AXA Versicherung AG", "21052299391",
+              "LASTSCHRIFT PN:931 AXA Versicherung AG")
+           for d in (date(2025, 1, 2), date(2025, 2, 2), date(2025, 3, 2))]
+    roh = finde_wiederkehrer(p1 + p2 + axa)
+    sheet = [g for g in roh if ist_identifizierbar(g.empfaenger)]
+    check(any("AXA" in g.empfaenger for g in sheet), "AXA (Firma) bleibt im Sheet")
+    check(not any(("Schmidt" in g.empfaenger or "Mueller" in g.empfaenger) for g in sheet),
+          "reine Personen-Gruppen ([NAME]) fallen aus dem Sheet")
 
 
 def test_m_kein_namensrest_substring():
@@ -317,7 +318,7 @@ if __name__ == "__main__":
     test_i_gruppierung_kaskade()
     test_j_firma_ungespalten()
     test_k_name_in_allen_feldern()
-    test_l_verschiedene_personen()
+    test_l_personen_nicht_im_sheet()
     test_m_kein_namensrest_substring()
     test_n_wiederkehrer_nur_verpflichtungen()
     print("\n" + ("Alle Feature-Tests bestanden." if _fehler == 0 else f"{_fehler} FEHLER!"))

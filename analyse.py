@@ -31,7 +31,11 @@ from typing import List
 
 import config
 import excel_export
-from anonymisierung import anonymisiere_buchungen, anonymisiere_wiederkehrer
+from anonymisierung import (
+    anonymisiere_buchungen,
+    anonymisiere_wiederkehrer,
+    ist_identifizierbar,
+)
 from buchungsart import extrahiere_art
 from categorize import LLMClient
 from control import kontroll_report, pruefe_auszug
@@ -231,7 +235,10 @@ def _schreibe_ausgaben(gesamt: List[Buchung]) -> None:
     anonymisieren -> VOLL + ANONYM schreiben."""
     print("\n--- Wiederkehrer erkennen + Excel schreiben (VOLL + ANONYM) ---")
     wiederkehrer = finde_wiederkehrer(gesamt)               # auf Klarnamen!
-    print(f"  [Wiederkehrer] {len(wiederkehrer)} Gruppe(n) erkannt.")
+    # Nur klar identifizierbare Verpflichtungen ins Sheet -- keine reinen
+    # [NAME]-Gruppen (Personen-Empfaenger ohne Firma/Institution).
+    wiederkehrer = [g for g in wiederkehrer if ist_identifizierbar(g.empfaenger)]
+    print(f"  [Wiederkehrer] {len(wiederkehrer)} identifizierbare Gruppe(n).")
 
     excel_export.schreibe_excel(config.EXCEL_VOLL, gesamt, wiederkehrer, mit_daten=True)
     print(f"  [Excel] VOLL  : {config.EXCEL_VOLL}")

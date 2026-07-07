@@ -143,6 +143,25 @@ def _maskiere_personen(text: str, min_len: int) -> str:
     return _SEQ_RE.sub(repl, text)
 
 
+def ist_identifizierbar(empfaenger: str) -> bool:
+    """True, wenn der Empfaenger eine identifizierbare Firma/Institution ist.
+
+    Fixkosten-Wiederkehrer haben einen erkennbaren Empfaenger (Firma/Institution)
+    -- nach der Schwaerzung bleibt also mehr als "[NAME]" uebrig. Reine
+    Personen-Empfaenger (schwaerzen komplett zu "[NAME]") sind KEIN
+    Fixkosten-Wiederkehrer und werden aus dem Sheet ausgeschlossen.
+    """
+    if not empfaenger:
+        return False
+    if _ist_firma_span(empfaenger):
+        return True
+    anon = _maskiere_personen(empfaenger, min_len=1)
+    rest = re.sub(r"\[NAME\]", " ", anon)
+    rest = re.sub(r"[^A-Za-zÄÖÜäöüß]", " ", rest)
+    worte = [w for w in rest.split() if len(w) >= 3 and w.lower() not in _STOP]
+    return bool(worte)
+
+
 def _empfaenger_personname(empfaenger: str) -> str:
     """Liefert den fuehrenden Personennamen eines Empfaengerfeldes oder ""
     (wenn Firma). Genutzt, um denselben Namen auch im Belegtext zu tilgen."""

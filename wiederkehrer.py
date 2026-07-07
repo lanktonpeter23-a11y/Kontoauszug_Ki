@@ -192,12 +192,15 @@ def finde_wiederkehrer(buchungen: List[Buchung]) -> List[WiederkehrerGruppe]:
             fallback.setdefault(nk, []).append(b)
 
     ergebnis: List[WiederkehrerGruppe] = []
+    # Mindestens 3 Vorkommen: 2-Vorkommen-Gruppen sind statistisch kein Abo/
+    # keine Verpflichtung (Einkaufs-Rauschen wie REWE/EDEKA/Apotheke) und
+    # bleiben ganz draussen.
     # PRIMAER: stabile Referenz KONSTANT (durch Gruppierung garantiert) UND
     # regelmaessiger Abstand. So bleibt AXA (feste MREF, Monatsrhythmus, Betrag
     # darf schwanken) drin, waehrend Amazon/PayPal (evtl. gleiche MREF, aber
     # UNREGELMAESSIGE Kauf-Abstaende) herausfallen.
     for key, gb in primaer.items():
-        if len(gb) >= 2 and _abstand_regelmaessig(gb):
+        if len(gb) >= 3 and _abstand_regelmaessig(gb):
             ergebnis.append(_baue_gruppe(gb, "ref:" + key))
     # FALLBACK (keine stabile Referenz): nur echte Dauerauftraege/Miete --
     # MINDESTENS 3 Vorkommen (2 Punkte ergeben keinen belegten Rhythmus),

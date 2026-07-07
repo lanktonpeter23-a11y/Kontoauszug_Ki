@@ -292,10 +292,14 @@ Firmen bleiben — auch im Wiederkehrend-Sheet). Beide enthalten dieselben Sheet
    wechselnden Beträgen (z. B. `6,84`/`7,00`) bleibt **eine** Gruppe, der
    Betrag ist nie ein harter Schlüssel; erst als Fallback (z. B.
    Kartenzahlung ohne Referenz) über normalisierten Empfänger **und** ähnlichen
-   Betrag (±15 %) **und** regelmäßigen Abstand. Klassifikation **SICHER** (≥3
-   in regelmäßigem Abstand) oder **WAHRSCHEINLICH**. *Betragsschwankung = ja*
-   ist ein Preiserhöhungs-Hinweis. In der ANONYM-Datei werden Personen-Gruppen
-   über einen maskierten Anker (Ref-/IBAN-Endziffern) unterscheidbar gehalten.
+   Betrag (±10 %) **und** regelmäßigen Abstand. Es erscheinen nur echte,
+   **klar identifizierbare Verpflichtungen** mit **≥3** regelmäßigen Vorkommen
+   und einem Firmen-/Institutions-Empfänger (AXA, congstar, DEVK, Telekom,
+   Versicherungen, Abos). Bewusst **ausgeschlossen**: 2-Vorkommen-Rauschen
+   (REWE/EDEKA/Apotheke), Einkäufe mit wechselndem Betrag/ohne festen Rhythmus
+   (Amazon/PayPal/Tanken) und reine Personen-Empfänger (die zu `[NAME]`
+   schwärzen). Klassifikation **SICHER** (≥3 regelmäßig) bzw. **WAHRSCHEINLICH**;
+   *Betragsschwankung = ja* ist ein Preiserhöhungs-Hinweis.
 5. **Pruefen** — alle Buchungen mit Status `PRUEFEN` inkl. Saldo-Differenz.
 
 Zahlen sind **echte Zahlen** (Excel-Zahlenformat), Kopfzeile fett, **Autofilter
