@@ -32,6 +32,11 @@ EXCEL_DATEI = os.path.join(AUSWERTUNG_ORDNER, "Finanzanalyse.xlsx")
 
 # Temporaerer Ordner fuer gerenderte Seitenbilder (wird pro Lauf geleert).
 TEMP_ORDNER = os.path.join(AUSWERTUNG_ORDNER, ".tmp_render")
+# OCR-Dump: der intern erzeugte OCR-Text je PDF (exakt der Parsing-Input).
+OCR_ORDNER = os.path.join(AUSWERTUNG_ORDNER, "ocr")
+
+# Seiten-Trenner im internen OCR-Text (auch im Dump verwendet).
+SEITEN_TRENNER = "===SEITENENDE==="
 
 # ---------------------------------------------------------------------------
 # EBENE 1 -- Rendern

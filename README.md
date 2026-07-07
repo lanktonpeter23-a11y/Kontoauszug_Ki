@@ -22,7 +22,8 @@ Android, aarch64, kein Root).
 ```
 /data/data/com.termux/files/home/downloads/Kontoauszuege/   <- HIER PDFs hineinwerfen
         ├── Auswertung/
-        │      └── Finanzanalyse.xlsx              <- Ergebnis (4 Sheets)
+        │      ├── Finanzanalyse.xlsx              <- Ergebnis (4 Sheets)
+        │      └── ocr/<pdfname>.txt               <- OCR-Dump je PDF (Parsing-Input, ===SEITENENDE===)
         └── verarbeitet/                           <- fertige PDFs (verschoben, nie gelöscht)
 ```
 

@@ -69,7 +69,13 @@ def verarbeite_pdf(pdf_pfad: str, profile) -> Auszug:
         print(f"        Seite {i}/{len(bilder)} ...")
         vorverarbeiten(bild)
         text_teile.append(bild_zu_text(bild))
-    ocr_text = "\n".join(text_teile)
+    # Seiten mit dem Trenner zusammenfuegen -> dieser String geht 1:1 ins
+    # Parsing UND in den OCR-Dump (Seiten getrennt durch ===SEITENENDE===).
+    ocr_text = f"\n{config.SEITEN_TRENNER}\n".join(text_teile)
+
+    # OCR-DUMP: den intern erzeugten OCR-Text (nach Pillow-Vorverarbeitung)
+    # je PDF wegschreiben -- exakt der String, der ins Parsing geht. Immer an.
+    _schreibe_ocr_dump(name, ocr_text)
 
     # EBENE 3 -- Parsing
     print("  [3/4] Parsing (regelbasiert) ...")
@@ -234,6 +240,25 @@ def _eindeutiges_ziel(pfad: str) -> str:
     while os.path.exists(f"{basis}_{i}{ext}"):
         i += 1
     return f"{basis}_{i}{ext}"
+
+
+def _schreibe_ocr_dump(pdf_name: str, ocr_text: str) -> None:
+    """Schreibt den intern erzeugten OCR-Text (Parsing-Input) nach
+    Auswertung/ocr/<pdfname>.txt. Immer aktiv; Fehler brechen den Lauf nicht ab.
+
+    So laesst sich der Golden Master an den TATSAECHLICH intern erzeugten OCR-
+    Text angleichen (die extern erzeugte Fixture kann abweichen, weil hier mit
+    Pillow-Vorverarbeitung geOCRt wird).
+    """
+    try:
+        os.makedirs(config.OCR_ORDNER, exist_ok=True)
+        basis = os.path.splitext(os.path.basename(pdf_name))[0]
+        ziel = os.path.join(config.OCR_ORDNER, basis + ".txt")
+        with open(ziel, "w", encoding="utf-8") as fh:
+            fh.write(ocr_text)
+        print(f"        OCR-Dump: {ziel}")
+    except OSError as exc:
+        print(f"        [WARN] OCR-Dump fehlgeschlagen: {exc}")
 
 
 def _still_entfernen(pfad: str) -> None:
