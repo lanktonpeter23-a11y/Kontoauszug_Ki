@@ -154,6 +154,9 @@ def main(argv=None) -> int:
     print(" Kontoauszug-KI  --  lokale Analyse (Termux)")
     print("=" * 64)
 
+    # Bedienungsanleitung bei JEDEM Lauf mit aufs Handy exportieren.
+    _export_anleitung()
+
     # --- FEATURE 4: Excel als Input (kein OCR) ---
     if args.excel:
         return _excel_input_lauf(args.excel)
@@ -277,6 +280,28 @@ def _sichtbar_machen(pfade: List[str]) -> None:
             print(f"  [Export] sichtbar im Dateimanager: {kopie}")
         except OSError as exc:
             print(f"  [WARN] Export nach {ziel} fehlgeschlagen: {exc}")
+
+
+def _export_anleitung() -> None:
+    """DOKU: ANLEITUNG.txt bei jedem Lauf in den Android-Download-Ordner
+    kopieren (gleiche Feature-5B-Mechanik wie die Excel-Dateien).
+    Robust: jeder Fehler ergibt nur einen Hinweis, nie einen Abbruch.
+    Abschaltbar ueber denselben config-Schluessel export_to_shared."""
+    if not config.export_to_shared_aktiv():
+        return
+    quelle = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          "ANLEITUNG.txt")
+    if not os.path.exists(quelle):
+        return
+    ziel = _shared_download_ordner()
+    if not ziel:
+        return
+    try:
+        kopie = shutil.copy(quelle, ziel)
+        _media_scan(kopie)
+        print(f"  [Anleitung] sichtbar im Dateimanager: {kopie}")
+    except OSError as exc:
+        print(f"  [WARN] Anleitung-Export fehlgeschlagen: {exc}")
 
 
 def _shared_download_ordner() -> str:

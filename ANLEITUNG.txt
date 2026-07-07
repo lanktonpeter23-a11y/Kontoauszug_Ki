@@ -1,0 +1,175 @@
+========================================================================
+  KONTOAUSZUG-KI  -  EINFACHE BEDIENUNGSANLEITUNG
+========================================================================
+
+Dieses Programm liest eingescannte Bank-Kontoauszuege (PDF) und macht
+daraus eine uebersichtliche Excel-Tabelle. Alles laeuft nur auf dem
+Handy (Termux), nichts wird ins Internet geschickt.
+
+Diese Anleitung landet nach jedem Lauf automatisch auch in deinem
+Download-Ordner, damit du sie ohne Termux lesen kannst.
+
+
+------------------------------------------------------------------------
+1) SCHNELLSTART  (die drei wichtigsten Befehle)
+------------------------------------------------------------------------
+
+Zuerst immer in den Programm-Ordner wechseln:
+
+    cd ~/Kontoauszug_Ki
+
+A) Alle abgelegten PDFs auswerten (der Normalfall):
+
+    python analyse.py
+
+B) Nur pruefen, ob alles gelesen wird - OHNE Excel zu schreiben:
+
+    python analyse.py --dry-run
+
+C) Eine schon fertige Excel noch einmal auswerten:
+
+    python analyse.py --excel /pfad/zur/Finanzanalyse_VOLL.xlsx
+
+
+------------------------------------------------------------------------
+2) EINMALIGE EINRICHTUNG  (nur beim allerersten Mal noetig)
+------------------------------------------------------------------------
+
+Diese Befehle nacheinander in Termux eingeben:
+
+    pkg update && pkg upgrade
+    pkg install python tesseract poppler
+    termux-setup-storage
+
+(Bei termux-setup-storage fragt Android nach Erlaubnis - "Zulassen".)
+
+Das deutsche Texterkennungs-Paket herunterladen:
+
+    curl -L -o "$PREFIX/share/tessdata/deu.traineddata" \
+      https://github.com/tesseract-ocr/tessdata_fast/raw/main/deu.traineddata
+
+Die benoetigten Python-Zusaetze installieren:
+
+    pip install Pillow openpyxl requests
+
+Fertig. Diese Einrichtung musst du nur EINMAL machen.
+
+
+------------------------------------------------------------------------
+3) PDFs VERARBEITEN
+------------------------------------------------------------------------
+
+Lege deine eingescannten Auszuege (PDF) in diesen Ordner:
+
+    /data/data/com.termux/files/home/downloads/Kontoauszuege
+
+Du kannst beliebig viele PDFs hineinlegen - mehrere Monate, mehrere
+Konten, verschiedene Banken gemischt. Den Ordner legt das Programm beim
+ersten Lauf selbst an.
+
+Dann starten:
+
+    cd ~/Kontoauszug_Ki
+    python analyse.py
+
+Fertig verarbeitete PDFs werden automatisch in den Unterordner
+"verarbeitet" verschoben (sie werden nie geloescht).
+
+
+------------------------------------------------------------------------
+4) EINE BESTEHENDE EXCEL NOCH EINMAL AUSWERTEN
+------------------------------------------------------------------------
+
+    python analyse.py --excel /pfad/zur/Datei.xlsx
+
+WICHTIG: Das geht nur mit einer VOLLSTAENDIGEN, NICHT anonymisierten
+Excel (also "Finanzanalyse_VOLL.xlsx"). Eine bereits anonymisierte
+Datei ("...ANONYM.xlsx") kann NICHT noch einmal ausgewertet werden -
+dort fehlen die Empfaenger-Namen. Rueckwaerts geht es nicht.
+
+
+------------------------------------------------------------------------
+5) KUENSTLICHE INTELLIGENZ (KI) EIN- ODER AUSSCHALTEN
+------------------------------------------------------------------------
+
+Die KI sortiert die Buchungen nur in Kategorien ein (Fixkosten,
+Lebenshaltung, Tanken ...). Das Programm laeuft AUCH KOMPLETT OHNE KI -
+dann bleibt die Spalte "Kategorie" leer bzw. "unkategorisiert", alles
+andere (Tabelle, Salden-Pruefung, Wiederkehrer) ist trotzdem da.
+
+Die Einstellung steht in der Datei  config.json  im Programm-Ordner.
+
+KI AUSSCHALTEN - einfacher Einzeiler (im Programm-Ordner):
+
+    sed -i 's/"llm_enabled": true/"llm_enabled": false/' config.json
+
+KI WIEDER EINSCHALTEN:
+
+    sed -i 's/"llm_enabled": false/"llm_enabled": true/' config.json
+
+Oder von Hand: config.json mit einem Texteditor oeffnen und in der
+Zeile  "llm_enabled": true,  das Wort true auf false aendern (oder
+umgekehrt). Anfuehrungszeichen und Komma stehen lassen.
+
+--- Optional: die lokale KI starten (nur wenn KI eingeschaltet ist) ---
+
+    pkg install ollama
+    ollama serve &
+    ollama pull phi4-mini
+
+Danach laeuft die KI lokal auf dem Handy. Ist sie nicht gestartet,
+macht das Programm trotzdem alles - nur eben ohne Kategorien.
+
+
+------------------------------------------------------------------------
+6) WO LANDEN DIE ERGEBNISSE?
+------------------------------------------------------------------------
+
+Es entstehen ZWEI Excel-Dateien:
+
+  Finanzanalyse_VOLL.xlsx    -> mit echten Namen (fuer dich)
+  Finanzanalyse_ANONYM.xlsx  -> Personennamen geschwaerzt, Kontonummern
+                                maskiert (zum Weitergeben, z.B. an den
+                                Steuerberater)
+
+Sie liegen im Ordner:
+
+    /data/data/com.termux/files/home/downloads/Kontoauszuege/Auswertung/
+
+UND werden nach jedem Lauf automatisch zusaetzlich in deinen normalen
+Android-DOWNLOAD-Ordner kopiert. Dort findest du sie mit jedem
+Datei-Manager (und auch diese Anleitung als ANLEITUNG.txt).
+
+In jeder Excel gibt es ein Uebersichts-Blatt "Konten" und pro Konto
+ein eigenes Blatt "Journal_..." und "Wiederkehrend_..." (die letzten
+vier Ziffern der Kontonummer im Namen).
+
+
+------------------------------------------------------------------------
+7) WENN ETWAS HAKT  (die haeufigsten Stolpersteine)
+------------------------------------------------------------------------
+
+* "Datei nicht gefunden" bei --excel:
+  Oft ist die Datei nur ein Cloud-Platzhalter und nicht wirklich auf
+  dem Handy. Im Datei-Manager die Datei einmal antippen/herunterladen
+  bzw. in den echten Download-Ordner kopieren und den Pfad dorthin
+  angeben.
+
+* KI braucht zu lange / "Timeout":
+  Entweder die KI ausschalten (siehe Punkt 5) - das Programm laeuft
+  komplett ohne sie durch. Oder in config.json den Wert
+  "llm_timeout": 180  hoeher setzen (z.B. 300).
+
+* Lauf bricht mittendrin ab, wenn der Bildschirm ausgeht:
+  In den Android-Einstellungen fuer die App "Termux" den Akku auf
+  "Unbeschraenkt" / "Nicht optimieren" stellen. Dann laufen auch lange
+  Auswertungen zu Ende.
+
+* Die Ausgabe erscheint nicht im Download-Ordner:
+  Der automatische Export ist an (Standard). Abschalten liesse er sich
+  in config.json ueber  "export_to_shared": false . Bleibt er an,
+  landet alles automatisch im Download-Ordner.
+
+========================================================================
+  Bei Fragen: einfach den Befehl aus Punkt 1 A) noch einmal ausfuehren.
+========================================================================
