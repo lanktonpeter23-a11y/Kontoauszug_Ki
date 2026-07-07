@@ -192,12 +192,21 @@ def finde_wiederkehrer(buchungen: List[Buchung]) -> List[WiederkehrerGruppe]:
             fallback.setdefault(nk, []).append(b)
 
     ergebnis: List[WiederkehrerGruppe] = []
+    # PRIMAER: stabile Referenz KONSTANT (durch Gruppierung garantiert) UND
+    # regelmaessiger Abstand. So bleibt AXA (feste MREF, Monatsrhythmus, Betrag
+    # darf schwanken) drin, waehrend Amazon/PayPal (evtl. gleiche MREF, aber
+    # UNREGELMAESSIGE Kauf-Abstaende) herausfallen.
     for key, gb in primaer.items():
-        if len(gb) >= 2:                          # stabile Referenz -> Wiederkehrer
+        if len(gb) >= 2 and _abstand_regelmaessig(gb):
             ergebnis.append(_baue_gruppe(gb, "ref:" + key))
+    # FALLBACK (keine stabile Referenz): nur echte Dauerauftraege/Miete --
+    # MINDESTENS 3 Vorkommen (2 Punkte ergeben keinen belegten Rhythmus),
+    # konstanter Empfaenger UND klar regelmaessiger Abstand (kleine Varianz)
+    # UND NAHEZU konstanter Betrag (enge Toleranz). Der Fallback "gleicher
+    # Haendler, wechselnder Betrag" ist bewusst ENTFERNT (Einkauf != Fixkosten);
+    # 2 zufaellige Kartenzahlungen (z.B. Tanken) fallen so heraus.
     for key, gb in fallback.items():
-        # Nur wenn MEHRERE Kriterien zusammenpassen (kein Betrags-only-Schluessel).
-        if len(gb) >= 2 and _betrag_im_band(gb, 0.15) and _abstand_regelmaessig(gb):
+        if len(gb) >= 3 and _abstand_regelmaessig(gb) and _betrag_im_band(gb, 0.10):
             ergebnis.append(_baue_gruppe(gb, "emp:" + key))
 
     ergebnis.sort(key=lambda g: -abs(g.summe))

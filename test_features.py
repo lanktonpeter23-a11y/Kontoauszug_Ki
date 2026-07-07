@@ -90,8 +90,9 @@ def test_d_wiederkehrer():
     drei = [Buchung(konto="X", datum=d, verwendungszweck="LASTSCHRIFT PN:931 Netflix Europe",
                     betrag=-12.99)
             for d in (date(2025, 1, 5), date(2025, 2, 4), date(2025, 3, 6))]
+    # Miete: Dauerauftrag mit stabiler Referenz (2x -> ueber Referenz-Pfad).
     zwei = [Buchung(konto="X", datum=d, verwendungszweck="EURO-UEBERWEISUNG PN:900 Miete Verwaltung",
-                    betrag=-800.0)
+                    betrag=-800.0, mandatsref="MIETE-DA-4711")
             for d in (date(2025, 1, 2), date(2025, 2, 2))]
     res = {g.schluessel: g for g in finde_wiederkehrer(drei + zwei)}
     net = next((g for k, g in res.items() if "netflix" in k), None)
@@ -267,6 +268,43 @@ def test_l_verschiedene_personen():
           "kein Klarname im Wiederkehrend-Empfaenger")
 
 
+def test_m_kein_namensrest_substring():
+    print("\n== m) FINALE Blockliste: kein Namensrest als Substring (FEHLER 1) ==")
+    b = Buchung(konto="X", datum=date(2025, 1, 2), betrag=-50.0,
+                empfaenger="Ulrike Weinzierl Abrechnung",
+                verwendungszweck="EURO-UEBERWEISUNG PN:900 Ulrike Weinzierl Abrechnung "
+                                 "WEINZIERLGLUED von ULRIKE",
+                referenz="Weinzierl-Ref-9", mandatsref="WEINZIERL99")
+    k = anonymisiere_buchungen([b])[0]
+    blob = " | ".join([k.empfaenger, k.verwendungszweck, k.referenz, k.mandatsref,
+                        k.glaeubiger_id, k.vertragsnr]).lower()
+    for teil in ("weinzierl", "ulrike"):
+        check(teil not in blob, f"'{teil}' in KEINEM Feld (auch nicht als Substring)")
+
+
+def test_n_wiederkehrer_nur_verpflichtungen():
+    print("\n== n) Wiederkehrer = nur echte Verpflichtungen (FEHLER 2) ==")
+    axa = [_b(d, x, "AXA Versicherung AG", "21052299391",
+              "LASTSCHRIFT PN:931 AXA Versicherung AG")
+           for d, x in ((date(2025, 1, 2), -6.84), (date(2025, 2, 2), -7.0), (date(2025, 3, 2), -7.0))]
+    # Amazon: (evtl. gleiche MREF, aber) UNREGELMAESSIGE Kauf-Abstaende -> raus
+    amz = [_b(d, x, "AMAZON PAYMENTS EUROPE", "vYv80KxdWOTY6U",
+              "LASTSCHRIFT PN:931 AMAZON PAYMENTS EUROPE")
+           for d, x in ((date(2025, 1, 2), -34.94), (date(2025, 1, 7), -1.99),
+                        (date(2025, 1, 8), -6.42), (date(2025, 1, 17), -30.69),
+                        (date(2025, 1, 21), -26.79))]
+    # 2 zufaellige Tankzahlungen ohne Referenz -> raus (kein belegter Rhythmus)
+    tank = [_b(d, x, "Tankstelle", "", "Kartenzahlung girocard PN:931 Tankstelle")
+            for d, x in ((date(2025, 1, 23), -77.21), (date(2025, 1, 28), -74.01))]
+    res = finde_wiederkehrer(axa + amz + tank)
+    namen = [g.empfaenger for g in res]
+    check(any("AXA" in n for n in namen), "AXA (stabile MREF, monatlich) = Wiederkehrer")
+    check(not any("AMAZON" in n for n in namen),
+          "Amazon (unregelmaessige Abstaende) = KEIN Wiederkehrer")
+    check(not any("Tankstelle" in n for n in namen),
+          "Tankstelle (2x, keine Referenz) = KEIN Wiederkehrer")
+
+
 if __name__ == "__main__":
     test_a_anonymisierung()
     test_b_referenzen()
@@ -280,5 +318,7 @@ if __name__ == "__main__":
     test_j_firma_ungespalten()
     test_k_name_in_allen_feldern()
     test_l_verschiedene_personen()
+    test_m_kein_namensrest_substring()
+    test_n_wiederkehrer_nur_verpflichtungen()
     print("\n" + ("Alle Feature-Tests bestanden." if _fehler == 0 else f"{_fehler} FEHLER!"))
     raise SystemExit(1 if _fehler else 0)

@@ -198,8 +198,30 @@ def anonymisiere_buchungen(buchungen: List[Buchung]) -> List[Buchung]:
         k.mandatsref = _feld_anon(b.mandatsref, name)
         k.glaeubiger_id = _feld_anon(b.glaeubiger_id, name)
         k.vertragsnr = _feld_anon(b.vertragsnr, name)
+
+        # FEHLER 1 -- FINALE Blocklisten-Nachpruefung: kein Namensbestandteil
+        # (Vor-/Nachname) darf in IRGENDEINEM Feld als Substring uebrig sein
+        # (case-insensitiv, auch in zusammengesetzten Tokens).
+        _finale_namensbereinigung(k, name)
         kopien.append(k)
     return kopien
+
+
+def _finale_namensbereinigung(k: "Buchung", name: str) -> None:
+    if not name:
+        return
+    worte = [w for w in re.split(r"[ .-]+", name) if len(w) >= 4]
+    if not worte:
+        return
+    muster = re.compile("|".join(re.escape(w) for w in worte), re.IGNORECASE)
+    for attr in ("empfaenger", "verwendungszweck", "referenz", "mandatsref",
+                 "glaeubiger_id", "vertragsnr"):
+        wert = getattr(k, attr, "") or ""
+        if wert:
+            neu = muster.sub(PLATZHALTER, wert)
+            # doppelte Platzhalter zusammenfassen
+            neu = re.sub(r"(?:\[NAME\]\s*){2,}", PLATZHALTER + " ", neu).strip()
+            setattr(k, attr, neu)
 
 
 def _feld_anon(text: str, name: str) -> str:
