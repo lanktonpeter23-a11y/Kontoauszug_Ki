@@ -116,14 +116,20 @@ def finde_datum_am_anfang(zeile: str) -> Optional[Tuple[int, int, Optional[int],
     """Erkennt den Bu-Tag: ein Buchungsdatum GANZ AM ZEILENANFANG.
 
     Rueckgabe: (tag, monat, jahr_oder_None, end_position) oder None.
-    KERN-REGEL: Eine echte Buchungszeile beginnt IMMER mit "TT.MM." (optional
-    gefolgt vom Wert-Tag). Vor dem Datum darf nur Leerraum stehen -- so gelten
-    Zeilen wie "Uebertrag von Blatt 1 ...", "alter Kontostand vom ..." oder
-    "SPARRATE ..." (Datum/Zahl irgendwo mitten in der Zeile) NICHT als Buchung.
-    Das Jahr ist oft nicht angegeben ("04.07.") -> Smart-Year ergaenzt es.
+    KERN-REGEL: Eine echte Buchungszeile beginnt IMMER mit dem KURZ-Datum
+    "TT.MM." (ohne Jahr), optional gefolgt vom Wert-Tag "TT.MM.". Es gelten
+    daher NICHT als Buchung:
+      * Zeilen, vor deren Datum Text steht ("alter Kontostand vom ...",
+        "Uebertrag von Blatt 1 ...", "SPARRATE ...").
+      * Zeilen, die mit einem LANG-Datum "TT.MM.JJJJ" beginnen -- das sind
+        Wertstellungs-/Kartenzahlungs-Zeitstempel wie
+        "31.12.2024 um 12:47:03 Uhr ..." und gehoeren zum Verwendungszweck.
     """
     m = _DATE_RE.search(zeile)
     if not m or zeile[:m.start()].strip():   # vor dem Datum steht Text -> keine Buchung
+        return None
+    # Lang-Datum (vierstelliges Jahr direkt dahinter) -> kein Bu-Tag.
+    if m.group("y") and len(m.group("y")) == 4:
         return None
     tag = int(m.group("d"))
     monat = int(m.group("m"))

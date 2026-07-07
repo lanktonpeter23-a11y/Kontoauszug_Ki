@@ -156,7 +156,7 @@ gesteuert:
   "llm_base_url": "http://127.0.0.1:11434",
   "llm_model": "phi4-mini",
   "llm_enabled": true,
-  "llm_timeout": 60
+  "llm_timeout": 180
 }
 ```
 
@@ -311,8 +311,18 @@ Buchungssatz und dient dem Append-Modus.
 
 ```bash
 python textutils.py     # prüft die deutsche Betrags-/Datumserkennung
-python test_parser.py   # prüft S/H-Vorzeichen, Übertrags-Ausschluss, Bank/Jahr
+python test_parser.py   # Unit-Tests + GOLDEN-MASTER gegen echten LIGA-Auszug
 ```
+
+`test_parser.py` enthält einen **Golden-Master-Test** gegen einen echten
+(anonymisierten) 7-seitigen LIGA-BANK-Auszug
+(`tests/fixtures/liga_ocr_anonymized.txt`). Er ist **Pflicht-Test für jede
+Parser-Änderung**: der komplette Auszug muss cent-genau auf `OK` gehen
+(alter Saldo + Summe = neuer Saldo). Die Fixture wurde mit
+`tools/anonymize_ocr.py` von personenbezogenen Daten befreit (Namen → `NAME`,
+IBANs/Referenzen maskiert), während Beträge, S/H-Kennzeichen, Datumsformate
+und die komplette Zeilenstruktur (inkl. der OCR-delaminierten Seite 1)
+**unverändert** bleiben.
 
 ## Dateien
 
@@ -331,4 +341,6 @@ python test_parser.py   # prüft S/H-Vorzeichen, Übertrags-Ausschluss, Bank/Jah
 | `excel_export.py` | Excel-Ausgabe (4 Sheets, Append-Modus) |
 | `models.py` | Datenmodelle (`Buchung`, `Auszug`) |
 | `bank_profiles.json` | konfigurierbare Bank-Layout-Profile |
-| `test_parser.py` | Unit-Tests (S/H-Vorzeichen, Übertrags-Ausschluss, Bank/Jahr) |
+| `test_parser.py` | Unit-Tests + Golden-Master (echter LIGA-Auszug) |
+| `tests/fixtures/liga_ocr_anonymized.txt` | anonymisierte Golden-Master-Fixture |
+| `tools/anonymize_ocr.py` | Anonymisierer (OCR-Text → PII-freie Fixture) |

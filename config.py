@@ -63,7 +63,7 @@ _LLM_DEFAULTS: Dict[str, Any] = {
     "llm_base_url": "http://127.0.0.1:11434",   # Ollama-Standard; llama.cpp: :8080
     "llm_model": "phi4-mini",                    # Alternative: "qwen3.5:4b"
     "llm_enabled": True,
-    "llm_timeout": 60,                            # Sekunden pro Batch-Anfrage
+    "llm_timeout": 180,                           # Sekunden pro Batch (phi4-mini auf Handy-CPU)
     "llm_retries": 1,                             # Wiederholungen pro Batch bei Fehler/Timeout
 }
 

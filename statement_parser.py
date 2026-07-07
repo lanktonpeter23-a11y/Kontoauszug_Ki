@@ -27,10 +27,13 @@ from textutils import (
 # ---------------------------------------------------------------------------
 # Generische Saldo-Bezeichnungen (klein geschrieben verglichen)
 # ---------------------------------------------------------------------------
+# Bewusst ENG gefasst (nur echter Anfangssaldo). Bare "uebertrag"/"vortrag"/
+# "kontostand vom" sind hier NICHT enthalten, sonst wuerde _finde_saldo eine
+# Zwischen-Uebertragszeile oder den NEUEN Kontostand als alten Saldo lesen.
+# Die Carry-Erkennung fuer Uebertrag/Kontostand laeuft separat ueber _CARRY_RE.
 _SALDO_ALT_LABELS = [
-    "alter kontostand", "kontostand alt", "alter saldo", "saldovortrag",
-    "saldo vortrag", "anfangssaldo", "anfangsbestand", "uebertrag",
-    "übertrag", "vortrag", "kontostand vom", "kontostand alt/neu",
+    "alter kontostand", "kontostand alt", "alter saldo",
+    "saldovortrag", "saldo vortrag", "anfangssaldo", "anfangsbestand",
 ]
 _SALDO_NEU_LABELS = [
     "neuer kontostand", "kontostand neu", "neuer saldo", "endsaldo",
@@ -67,9 +70,30 @@ _PERIODE_RE = re.compile(r"vom\s+\d{1,2}\.\d{1,2}\.(\d{4})")
 # Auszugsnummer inkl. Jahr im Kopf, z.B. "Kontoauszug 1/2025", "Auszug Nr. 3/2025".
 _AUSZUG_JAHR_RE = re.compile(r"(?:kontoauszug|auszug)[^\n]*?\b\d{1,2}\s*/\s*(20\d{2})\b", re.IGNORECASE)
 
+# Seiten-Trenner im OCR-Text (mehrere PDF-Seiten in einem Textstrom).
+_SEITE_RE = re.compile(r"=+\s*SEITENENDE\s*=+", re.IGNORECASE)
+
+# Zeile, die NUR aus einem Kurz-Datum "TT.MM." besteht (delaminierte Bu-Tag-Spalte).
+_NUR_KURZDATUM_RE = re.compile(r"^\s*\d{1,2}\.\d{1,2}\.\s*$")
+# Zeile, die NUR aus einem Betrag (optional + S/H) besteht (delaminierte Betragsspalte).
+_NUR_BETRAG_RE = re.compile(r"^\s*(\d{1,3}(?:\.\d{3})*|\d+),(\d{2})\s*([SHsh])?\s*$")
+# Beginn eines Buchungs-Vorgangs (fuer die Zweck-Segmentierung delaminierter Seiten).
+_VORGANG_START_RE = re.compile(
+    r"^\s*(?:LASTSCHRIFT|EURO-?[UÜ]E?BERWEISUNG|[UÜ]E?BERWEISUNG|KARTENZAHLUNG|"
+    r"AUSZAHLUNG|EINZAHLUNG|GUTSCHRIFT|GUTSCHR|LOHN|GEHALT|SPARRATE|DAUERAUFTRAG|"
+    r"ABBUCHUNG|SEPA)",
+    re.IGNORECASE,
+)
+
 
 def parse_auszug(ocr_text: str, quelle_pdf: str, profile: List[Dict[str, Any]]) -> Auszug:
-    """Baut aus dem kompletten OCR-Text eines PDFs einen ``Auszug``."""
+    """Baut aus dem kompletten OCR-Text eines PDFs einen ``Auszug``.
+
+    Der Text kann mehrere Seiten enthalten (getrennt durch ===SEITENENDE===).
+    Jede Seite wird einzeln geparst: saubere Zeilen-Layouts ueber den
+    zeilenbasierten Parser, delaminierte Seiten (OCR hat Spalten getrennt) ueber
+    den Spalten-Zip-Parser.
+    """
     auszug = Auszug(quelle_pdf=quelle_pdf)
 
     profil = _erkenne_profil(ocr_text, profile)
@@ -77,10 +101,27 @@ def parse_auszug(ocr_text: str, quelle_pdf: str, profile: List[Dict[str, Any]]) 
 
     auszug.konto = _finde_konto(ocr_text, profil)
     auszug.jahr = _finde_jahr(ocr_text)
-    auszug.saldo_alt = _finde_saldo(ocr_text, _labels(profil, "saldo_alt", _SALDO_ALT_LABELS))
+
+    # Balance-Checkpoints (Uebertrag/Kontostand-Werte) doc-weit einsammeln --
+    # damit delaminierte Betragsspalten die Saldo-Werte nicht als Buchung zaehlen.
+    balance_werte = _sammle_balance_werte(ocr_text)
+    auszug.saldo_alt = (_finde_saldo(ocr_text, _labels(profil, "saldo_alt", _SALDO_ALT_LABELS))
+                        or _finde_saldo_alt_delaminiert(ocr_text, balance_werte))
     auszug.saldo_neu = _finde_saldo(ocr_text, _labels(profil, "saldo_neu", _SALDO_NEU_LABELS))
 
-    auszug.buchungen = _parse_buchungen(ocr_text, auszug, profil)
+    ausschluss = set(balance_werte)
+    for s in (auszug.saldo_alt, auszug.saldo_neu):
+        if s is not None:
+            ausschluss.add(round(s, 2))
+
+    for seite in _SEITE_RE.split(ocr_text):
+        if not seite.strip():
+            continue
+        if _ist_delaminiert(seite):
+            auszug.buchungen.extend(_parse_delaminiert(seite, auszug, ausschluss))
+        else:
+            auszug.buchungen.extend(_parse_buchungen(seite, auszug, profil))
+
     _smart_year(auszug)
     return auszug
 
@@ -276,6 +317,133 @@ def _bau_buchung(auszug: Auszug, tag, monat, jahr, zweck, betrag, explizit, roh)
     # Rohdatum temporaer in Attributen ablegen (fuer Smart-Year).
     b._tag, b._monat, b._jahr = tag, monat, jahr  # type: ignore[attr-defined]
     return b
+
+
+# ---------------------------------------------------------------------------
+# DELAMINIERTE SEITEN (OCR hat die Tabellenspalten getrennt)
+# ---------------------------------------------------------------------------
+def _sammle_balance_werte(text: str) -> set:
+    """Alle Saldo-Checkpoint-Werte (Uebertrag/Kontostand) aus TEXT-Zeilen.
+
+    Diese Werte sind KEINE Buchungen. Auf delaminierten Seiten stehen die
+    gleichen Werte in einer nackten Betragsspalte -- ueber diese Menge werden
+    sie dort von den Buchungsbetraegen getrennt.
+    """
+    werte = set()
+    for zeile in text.splitlines():
+        if _ist_carry_zeile(zeile):
+            for wert, _s, _e, _expl in finde_alle_betraege(zeile):
+                werte.add(round(wert, 2))
+    return werte
+
+
+def _finde_saldo_alt_delaminiert(text: str, balance_werte: set) -> Optional[float]:
+    """Alten Kontostand finden, wenn seine Betragszeile delaminiert wurde.
+
+    Auf der ersten Seite steht der alte Kontostand als nackte Betragszeile
+    (der Label-Text "alter Kontostand vom ..." wurde vom OCR in einen anderen
+    Block getrennt). Er ist der nackte Betrag, der KEIN bekannter
+    Uebertrags-/Kontostand-Checkpoint ist.
+    """
+    erste_seite = _SEITE_RE.split(text)[0]
+    if not _ist_delaminiert(erste_seite):
+        return None
+    kandidaten = []
+    for zeile in erste_seite.splitlines():
+        m = _NUR_BETRAG_RE.match(zeile)
+        if not m:
+            continue
+        wert = float((m.group(1) + "," + m.group(2)).replace(".", "").replace(",", "."))
+        # Nur H-Salden (Guthaben) und keine bekannten Uebertrags-Checkpoints.
+        if (m.group(3) or "").upper() == "H" and round(wert, 2) not in balance_werte:
+            kandidaten.append(round(wert, 2))
+    # Der alte Kontostand ist der erste solche Wert (Kredit-/Guthabenrahmen ohne
+    # H-Kennung wurde durch die H-Pflicht bereits ausgeschlossen).
+    return kandidaten[0] if kandidaten else None
+
+
+def _ist_delaminiert(seite: str) -> bool:
+    """Erkennt eine Seite, deren Tabellenspalten das OCR getrennt hat.
+
+    Kennzeichen: mehrere Zeilen, die NUR aus einem Kurz-Datum bestehen, UND
+    mehrere Zeilen, die NUR aus einem Betrag bestehen (statt beides pro Zeile).
+    """
+    zeilen = seite.splitlines()
+    nur_datum = sum(1 for z in zeilen if _NUR_KURZDATUM_RE.match(z))
+    nur_betrag = sum(1 for z in zeilen if _NUR_BETRAG_RE.match(z))
+    return nur_datum >= 3 and nur_betrag >= 3
+
+
+def _parse_delaminiert(seite: str, auszug: Auszug, ausschluss: set) -> List[Buchung]:
+    """Baut Buchungen aus einer delaminierten Seite per Spalten-Zip.
+
+    Sammelt (in Dokumentreihenfolge) die Bu-Tag-Kurzdaten, die Buchungsbetraege
+    (nackte Betragszeilen mit S/H, ohne die Saldo-Checkpoints) und die
+    Vorgangs-Textsegmente -- und fuegt sie index-weise zusammen.
+    """
+    zeilen = [z for z in seite.splitlines() if z.strip()]
+
+    # 1) Bu-Tag-Kurzdaten (nur-Datum-Zeilen).
+    daten = []
+    for z in zeilen:
+        if _NUR_KURZDATUM_RE.match(z):
+            di = finde_datum_am_anfang(z)
+            if di:
+                daten.append(di)
+
+    # 2) Buchungsbetraege: nackte Betragszeilen MIT S/H, ohne Saldo-Checkpoints.
+    betraege = []
+    for z in zeilen:
+        m = _NUR_BETRAG_RE.match(z)
+        if not m:
+            continue
+        sh = (m.group(3) or "").upper()
+        if not sh:                       # ohne S/H (z.B. Kreditrahmen) -> keine Buchung
+            continue
+        wert = float((m.group(1) + "," + m.group(2)).replace(".", "").replace(",", "."))
+        if round(wert, 2) in ausschluss:  # Uebertrag/Kontostand -> keine Buchung
+            continue
+        betraege.append(-abs(wert) if sh == "S" else abs(wert))
+
+    # 3) Vorgangs-Textsegmente (fuer die Verwendungszwecke).
+    segmente = _vorgang_segmente(zeilen)
+
+    # 4) Zip: Buchungsbetraege sind die Leitgroesse (jeder Betrag = eine Buchung).
+    buchungen: List[Buchung] = []
+    for i, betrag in enumerate(betraege):
+        di = daten[i] if i < len(daten) else (daten[-1] if daten else None)
+        zweck = segmente[i] if i < len(segmente) else ""
+        if di:
+            tag, monat, jahr, _ende = di
+        else:
+            tag = monat = jahr = None
+        b = _bau_buchung(auszug, tag, monat, jahr, zweck, betrag, True, zweck or "delaminiert")
+        buchungen.append(b)
+    return buchungen
+
+
+def _vorgang_segmente(zeilen: List[str]) -> List[str]:
+    """Teilt die Vorgangs-Zeilen einer delaminierten Seite in Buchungs-Bloecke.
+
+    Jeder Block beginnt an einer Vorgangs-Start-Zeile (LASTSCHRIFT, EURO-
+    UEBERWEISUNG, Kartenzahlung, ...). Saldo-/Kopf-/Datum-/Betragszeilen werden
+    dabei uebersprungen.
+    """
+    segmente: List[str] = []
+    aktuell: Optional[List[str]] = None
+    for z in zeilen:
+        if _VORGANG_START_RE.match(z) and not _ist_carry_zeile(z):
+            if aktuell is not None:
+                segmente.append(" ".join(aktuell).strip())
+            aktuell = [z.strip()]
+        elif aktuell is not None:
+            if (_NUR_KURZDATUM_RE.match(z) or _NUR_BETRAG_RE.match(z)
+                    or _ist_carry_zeile(z) or _ist_kopf_zeile(z)):
+                continue
+            aktuell.append(z.strip())
+    if aktuell is not None:
+        segmente.append(" ".join(aktuell).strip())
+    return segmente
 
 
 # ---------------------------------------------------------------------------

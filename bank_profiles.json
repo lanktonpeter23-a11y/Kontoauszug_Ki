@@ -3,15 +3,15 @@
   "profile": [
     {
       "name": "LIGA BANK",
-      "erkennung": ["liga bank", "liga-bank", "ligabank", "75090500", "7509 0500", "de79 7509 0500"],
-      "saldo_alt": ["alter kontostand", "kontostand vom"],
+      "erkennung": ["liga bank", "liga-bank", "ligabank", "ligca", "75090500", "75090300", "7509 0500", "7509 0300"],
+      "saldo_alt": ["alter kontostand"],
       "saldo_neu": ["neuer kontostand"],
       "laufender_saldo": false
     },
     {
       "name": "Sparkasse",
       "erkennung": ["sparkasse", "sparkassen"],
-      "saldo_alt": ["alter kontostand", "kontostand alt", "kontostand vom"],
+      "saldo_alt": ["alter kontostand", "kontostand alt"],
       "saldo_neu": ["neuer kontostand", "kontostand neu"],
       "laufender_saldo": false
     },

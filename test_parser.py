@@ -11,15 +11,19 @@ Deckt insbesondere die Haertungs-Fixes ab:
   * FIX 3  deterministische Bank-Erkennung (LIGA BANK) + korrektes Jahr
 """
 
+import os
+import re
 import sys
 
 import config
 from control import pruefe_auszug
 from models import STATUS_OK, TYP_AUSGABE, TYP_EINNAHME
 from statement_parser import parse_auszug
+from statement_parser import _sammle_balance_werte
 from textutils import finde_letzten_betrag, parse_german_amount
 
 _PROFILE = config.lade_bank_profile()
+_HIER = os.path.dirname(os.path.abspath(__file__))
 _fehler = 0
 
 
@@ -174,11 +178,60 @@ def test_rollover_regression():
     check(a.status == STATUS_OK, f"Saldo-Kontrolle OK (Status={a.status})")
 
 
+# ---------------------------------------------------------------------------
+# GOLDEN MASTER -- echter (anonymisierter) LIGA-Auszug, 7 Seiten.
+# PFLICHT-Test fuer JEDE kuenftige Parser-Aenderung: der komplette Auszug
+# MUSS cent-genau auf OK gehen. Seite 1 ist im OCR delaminiert (Spalten
+# getrennt), Seiten 2-7 sind saubere Zeilen mit Kartenzahlungs-Folgezeilen.
+# ---------------------------------------------------------------------------
+def test_golden_master_liga():
+    print("\n== GOLDEN MASTER: echter LIGA-Auszug (Fixture) ==")
+    pfad = os.path.join(_HIER, "tests", "fixtures", "liga_ocr_anonymized.txt")
+    if not os.path.exists(pfad):
+        check(False, f"Fixture fehlt: {pfad}")
+        return
+    with open(pfad, encoding="utf-8") as fh:
+        ocr = fh.read()
+
+    a = parse_auszug(ocr, "liga_golden.pdf", _PROFILE)
+    pruefe_auszug(a)
+    summe = round(sum(b.betrag for b in a.buchungen), 2)
+
+    # (a) CENT-GENAU: alter Saldo + Summe = neuer Saldo
+    check(a.bank_profil == "LIGA BANK", f"Bank = LIGA BANK (ist {a.bank_profil})")
+    check(a.jahr == 2025, f"Jahr = 2025 (ist {a.jahr})")
+    check(a.saldo_alt == 5712.04, f"saldo_alt = 5712.04 (ist {a.saldo_alt})")
+    check(a.saldo_neu == 11681.18, f"saldo_neu = 11681.18 (ist {a.saldo_neu})")
+    check(summe == 5969.14, f"Summe Buchungen = 5969.14 (ist {summe})")
+    check(a.status == STATUS_OK, f"Status OK, Diff {a.saldo_differenz} (ist {a.status})")
+    check(round((a.saldo_alt or 0) + summe, 2) == a.saldo_neu, "alt + Summe == neu (cent-genau)")
+
+    # (b) KEINE betrag_fehlt-Zeilen (Kartenzahlungs-Folgezeilen mit Lang-Datum
+    #     duerfen NIE eigene Buchung sein).
+    check(len(a.unvollstaendige) == 0, f"0 betrag_fehlt (ist {len(a.unvollstaendige)})")
+    langdatum_start = re.compile(r"^\s*\d{1,2}\.\d{1,2}\.\d{4}")
+    check(not any(langdatum_start.match(b.roh_zeile) for b in a.buchungen if b.roh_zeile),
+          "keine Buchung startet mit einem Lang-Datum TT.MM.JJJJ")
+
+    # (c) Uebertrag-/Kontostand-Werte tauchen NIE als Buchungsbetrag auf.
+    balance = _sammle_balance_werte(ocr) | {5712.04, 11681.18}
+    treffer = [b for b in a.buchungen if round(abs(b.betrag), 2) in balance]
+    check(not treffer, f"kein Uebertrags-/Kontostand-Betrag als Buchung ({len(treffer)} Treffer)")
+
+    # Regressions-Anker: exakte Buchungszahl (die zwei 'Geb.Uebernahme LIGA'-
+    # Zeilen sind Gebuehren-UEBERNAHMEN der Bank, keine eigenen Buchungen).
+    check(len(a.buchungen) == 61, f"exakt 61 Buchungen (ist {len(a.buchungen)})")
+
+    print(f"     -> {len(a.buchungen)} Buchungen, Summe {summe}, "
+          f"alt {a.saldo_alt} + Summe = {a.saldo_neu}, Status {a.status}")
+
+
 if __name__ == "__main__":
     test_soll_haben_vorzeichen()
     test_uebertrag_zeilen_ausgeschlossen()
     test_bu_tag_primaer_und_kein_fremdbetrag()
     test_liga_erkennung_und_jahr()
     test_rollover_regression()
+    test_golden_master_liga()
     print("\n" + ("Alle Tests bestanden." if _fehler == 0 else f"{_fehler} FEHLER!"))
     sys.exit(1 if _fehler else 0)
