@@ -102,53 +102,103 @@ def _haeufigste_art(buchungen: List[Buchung]) -> str:
     return max(zaehler, key=zaehler.get) if zaehler else "SONST"
 
 
+def _ref_schluessel(b: Buchung) -> str:
+    """Stabiler Referenz-Schluessel: Mandatsreferenz (MREF) bevorzugt, sonst
+    Vertrags-/Kundennr. Leer, wenn keine belastbare Referenz vorhanden."""
+    for feld in (b.mandatsref, b.vertragsnr):
+        norm = re.sub(r"[^0-9a-z]", "", (feld or "").lower())
+        if len(norm) >= 5:                       # "REF"/kurzes Rauschen ausschliessen
+            return norm
+    return ""
+
+
+def _intervalle(gb: List[Buchung]) -> List[int]:
+    md = sorted([b for b in gb if b.datum], key=lambda b: b.datum)
+    iv = [(md[i + 1].datum - md[i].datum).days for i in range(len(md) - 1)]
+    return [d for d in iv if d > 0]
+
+
+def _betrag_im_band(gb: List[Buchung], tol: float = 0.15) -> bool:
+    """Alle Betraege innerhalb +-tol um den Mittelwert (fuer den Fallback)."""
+    betr = [abs(b.betrag) for b in gb]
+    m = sum(betr) / len(betr)
+    return m > 0 and all(abs(x - m) <= tol * m for x in betr)
+
+
+def _abstand_regelmaessig(gb: List[Buchung]) -> bool:
+    iv = _intervalle(gb)
+    if len(iv) >= 2:
+        return _regelmaessig(iv)
+    if len(iv) == 1:                             # 2 Buchungen: plausibler Turnus?
+        return turnus_aus_tagen(iv[0]) != "unregelmaessig"
+    return False
+
+
+def _baue_gruppe(gb: List[Buchung], schluessel: str) -> WiederkehrerGruppe:
+    md = sorted([b for b in gb if b.datum], key=lambda b: b.datum)
+    iv = _intervalle(gb)
+    turnus = turnus_aus_tagen(median(iv)) if iv else "unregelmaessig"
+    anzahl = len(gb)
+    klass = "SICHER" if (anzahl >= 3 and _regelmaessig(iv)) else "WAHRSCHEINLICH"
+
+    betraege = [b.betrag for b in gb]
+    summe = round(sum(betraege), 2)
+    schwankung = (max(abs(x) for x in betraege) - min(abs(x) for x in betraege)) > 0.005
+    # Anzeigename: der bereits bereinigte Klar-Empfaenger (wird spaeter ggf.
+    # anonymisiert); Fallback auf die Kern-Extraktion.
+    anzeige = gb[0].empfaenger or anzeige_empfaenger(gb[0].verwendungszweck)
+
+    return WiederkehrerGruppe(
+        empfaenger=anzeige,
+        schluessel=schluessel,
+        art=_haeufigste_art(gb),
+        turnus=turnus,
+        anzahl=anzahl,
+        erster=md[0].datum if md else None,
+        letzter=md[-1].datum if md else None,
+        schnitt=round(summe / anzahl, 2),
+        summe=summe,
+        klassifikation=klass,
+        schwankung=schwankung,
+        buchungen=gb,
+    )
+
+
 def finde_wiederkehrer(buchungen: List[Buchung]) -> List[WiederkehrerGruppe]:
-    """Findet wiederkehrende Zahlungen (>=2 Vorkommen je Empfaenger)."""
-    gruppen: dict = {}
+    """Wiederkehrer-Erkennung als deterministische Kaskade.
+
+    1. PRIMAER: stabile Referenz (MREF / Vertrags-/Kundennr) -> danach
+       gruppieren. Betrag irrelevant (gleiche Police, wechselnde Betraege =
+       EINE Gruppe).
+    2. FALLBACK (keine Referenz, z.B. Kartenzahlung): Gruppe nur, wenn
+       normalisierter Empfaenger UND aehnlicher Betrag (+-15%) UND
+       regelmaessiger Abstand zusammenpassen.
+    Der Betrag ist NIE alleiniger/harter Schluessel -- variable Betraege mit
+    stabiler Referenz bleiben in EINER Gruppe.
+    """
+    primaer: dict = {}
+    ohne_ref: List[Buchung] = []
     for b in buchungen:
-        key = normalisiere_empfaenger(b.verwendungszweck)
-        if not key:
-            continue
-        gruppen.setdefault(key, []).append(b)
+        rk = _ref_schluessel(b)
+        if rk:
+            primaer.setdefault(rk, []).append(b)
+        else:
+            ohne_ref.append(b)
+
+    fallback: dict = {}
+    for b in ohne_ref:
+        nk = normalisiere_empfaenger(b.verwendungszweck) or normalisiere_empfaenger(b.empfaenger)
+        if nk:
+            fallback.setdefault(nk, []).append(b)
 
     ergebnis: List[WiederkehrerGruppe] = []
-    for key, gb in gruppen.items():
-        if len(gb) < 2:                          # nur Wiederkehrer (>= 2)
-            continue
-        mit_datum = sorted([b for b in gb if b.datum], key=lambda b: b.datum)
-        intervalle = [
-            (mit_datum[i + 1].datum - mit_datum[i].datum).days
-            for i in range(len(mit_datum) - 1)
-        ]
-        intervalle = [d for d in intervalle if d > 0]
-        turnus = turnus_aus_tagen(median(intervalle)) if intervalle else "unregelmaessig"
+    for key, gb in primaer.items():
+        if len(gb) >= 2:                          # stabile Referenz -> Wiederkehrer
+            ergebnis.append(_baue_gruppe(gb, "ref:" + key))
+    for key, gb in fallback.items():
+        # Nur wenn MEHRERE Kriterien zusammenpassen (kein Betrags-only-Schluessel).
+        if len(gb) >= 2 and _betrag_im_band(gb, 0.15) and _abstand_regelmaessig(gb):
+            ergebnis.append(_baue_gruppe(gb, "emp:" + key))
 
-        anzahl = len(gb)
-        if anzahl >= 3 and _regelmaessig(intervalle):
-            klass = "SICHER"
-        else:                                    # 2 Vorkommen, oder >=3 unregelmaessig
-            klass = "WAHRSCHEINLICH"
-
-        betraege = [b.betrag for b in gb]
-        summe = round(sum(betraege), 2)
-        schnitt = round(summe / anzahl, 2)
-        schwankung = (max(abs(x) for x in betraege) - min(abs(x) for x in betraege)) > 0.005
-
-        ergebnis.append(WiederkehrerGruppe(
-            empfaenger=anzeige_empfaenger(gb[0].verwendungszweck),
-            schluessel=key,
-            art=_haeufigste_art(gb),
-            turnus=turnus,
-            anzahl=anzahl,
-            erster=mit_datum[0].datum if mit_datum else None,
-            letzter=mit_datum[-1].datum if mit_datum else None,
-            schnitt=schnitt,
-            summe=summe,
-            klassifikation=klass,
-            schwankung=schwankung,
-            buchungen=gb,
-        ))
-
-    # groesste Summen zuerst (Betrag dem Betrage nach)
     ergebnis.sort(key=lambda g: -abs(g.summe))
     return ergebnis

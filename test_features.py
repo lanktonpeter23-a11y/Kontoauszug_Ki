@@ -16,7 +16,11 @@ import re
 import tempfile
 from datetime import date, datetime
 
-from anonymisierung import anonymisiere_buchungen, anonymisiere_text
+from anonymisierung import (
+    anonymisiere_buchungen,
+    anonymisiere_text,
+    anonymisiere_wiederkehrer,
+)
 from buchungsart import extrahiere_art
 from journalfelder import extrahiere_felder
 from models import Buchung
@@ -202,6 +206,67 @@ def test_h_normalisierung_konsistent():
     check(a == b == c and a != "", f"gleiche Person -> gleicher Schluessel ('{a}')")
 
 
+def _b(datum, betrag, empf, mref="", zweck=""):
+    return Buchung(konto="X", datum=datum, betrag=betrag, empfaenger=empf,
+                   mandatsref=mref, verwendungszweck=zweck or empf)
+
+
+def test_i_gruppierung_kaskade():
+    print("\n== i) Gruppierung: Referenz-Kaskade, Betrag nie harter Schluessel ==")
+    # AXA: gleiche MREF, Betrag 6,84 vs 7,00 -> EINE Gruppe
+    axa = [_b(date(2025, 1, 2), -6.84, "AXA Versicherung Aktiengesellschaft", "21052299391"),
+           _b(date(2025, 2, 2), -7.00, "AXA Versicherung Aktiengesellschaft", "21052299391")]
+    # Vattenfall: variabler Betrag, gleiche MREF, monatlich -> EINE Gruppe
+    vat = [_b(d, x, "Vattenfall Europe Sales", "M002000003885551")
+           for d, x in ((date(2025, 1, 8), -86.0), (date(2025, 2, 8), -92.5), (date(2025, 3, 8), -79.9))]
+    # Kartenzahlung ohne Referenz, variabler Betrag, unregelmaessig -> KEINE Gruppe
+    karte = [_b(d, x, "REWE Markt", "", "Kartenzahlung girocard PN:931 REWE")
+             for d, x in ((date(2025, 1, 3), -45.6), (date(2025, 1, 17), -12.3), (date(2025, 1, 28), -88.9))]
+    res = finde_wiederkehrer(axa + vat + karte)
+    axa_g = [g for g in res if "AXA" in g.empfaenger]
+    vat_g = [g for g in res if "Vattenfall" in g.empfaenger]
+    check(len(axa_g) == 1, f"AXA (gleiche MREF, 6,84 vs 7,00) = EINE Gruppe ({len(axa_g)})")
+    check(len(vat_g) == 1 and vat_g[0].turnus == "monatlich",
+          f"Vattenfall (variabel, MREF) = EINE Gruppe monatlich ({len(vat_g)})")
+    check(vat_g and vat_g[0].schwankung, "Vattenfall: Betragsschwankung=ja (Preishinweis)")
+    check(not any("REWE" in g.empfaenger for g in res),
+          "Kartenzahlung (variabel/unregelmaessig, keine Ref) -> KEINE Gruppe")
+
+
+def test_j_firma_ungespalten():
+    print("\n== j) Keine Ueberschwaerzung in Firmennamen ==")
+    for e in ["AMAZON PAYMENTS EUROPE S.C.A.", "PayPal Europe S.a.r.l. et Cie S.C.A",
+              "Autoh.Nachtmann OHG", "DUSL GMBH", "Swiss Life Lebensversicherung SE"]:
+        anon = anonymisiere_text(e, feld=True)
+        check("[NAME]" not in anon, f"Firma ungespalten: {e!r} -> {anon!r}")
+
+
+def test_k_name_in_allen_feldern():
+    print("\n== k) Name in ALLEN Feldern getilgt ==")
+    b = Buchung(konto="X", datum=date(2025, 1, 2), betrag=-50.0, empfaenger="Sabine Neppl",
+                verwendungszweck="EURO-UEBERWEISUNG PN:900 Sabine Neppl HuTa",
+                referenz="Sabine Neppl 12345", mandatsref="M999")
+    k = anonymisiere_buchungen([b])[0]
+    blob = " | ".join([k.empfaenger, k.verwendungszweck, k.referenz, k.mandatsref])
+    check("Neppl" not in blob and "Sabine" not in blob,
+          f"kein Klarname in irgendeinem Feld ({blob})")
+
+
+def test_l_verschiedene_personen():
+    print("\n== l) Verschiedene Personen -> verschiedene, unterscheidbare Gruppen ==")
+    p1 = [_b(d, -100.0, "Anna Schmidt", "",
+             "EURO-UEBERWEISUNG PN:801 Anna Schmidt Miete IBAN: DE11111111111111111111")
+          for d in (date(2025, 1, 2), date(2025, 2, 2), date(2025, 3, 2))]
+    p2 = [_b(d, -50.0, "Bernd Mueller", "",
+             "EURO-UEBERWEISUNG PN:801 Bernd Mueller Sparen IBAN: DE22222222222222222222")
+          for d in (date(2025, 1, 5), date(2025, 2, 5), date(2025, 3, 5))]
+    g = anonymisiere_wiederkehrer(finde_wiederkehrer(p1 + p2))
+    check(len(g) == 2, f"zwei Personen -> zwei Gruppen, kein Sammeltopf ({len(g)})")
+    check(len({x.empfaenger for x in g}) == 2, "Gruppen bleiben unterscheidbar (Anker)")
+    check(all("Schmidt" not in x.empfaenger and "Mueller" not in x.empfaenger for x in g),
+          "kein Klarname im Wiederkehrend-Empfaenger")
+
+
 if __name__ == "__main__":
     test_a_anonymisierung()
     test_b_referenzen()
@@ -211,5 +276,9 @@ if __name__ == "__main__":
     test_f_kein_ueberlauf()
     test_g_anonymisierung_hart()
     test_h_normalisierung_konsistent()
+    test_i_gruppierung_kaskade()
+    test_j_firma_ungespalten()
+    test_k_name_in_allen_feldern()
+    test_l_verschiedene_personen()
     print("\n" + ("Alle Feature-Tests bestanden." if _fehler == 0 else f"{_fehler} FEHLER!"))
     raise SystemExit(1 if _fehler else 0)

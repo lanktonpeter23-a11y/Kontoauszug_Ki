@@ -50,7 +50,9 @@ _FIRMA_RE = re.compile(
     r"\b(?:gmbh|mbh|ag|se|kg|kgaa|ohg|gbr|ug|eg|e\.?\s?v|e\.?\s?g)\b"
     r"|aktiengesellschaft"
     r"|\b(?:versicherung(?:en)?|bank|sparkasse|volksbank|raiffeisen|rundfunk|"
-    r"finanzamt|landratsamt|stadtwerke|vhs|genossenschaft)\b",
+    r"finanzamt|landratsamt|stadtwerke|vhs|genossenschaft|europe)\b"
+    # Auslaendische Rechtsformen (S.a.r.l., S.A, S.C.A, e.K.) -> Firma.
+    r"|s\.?\s?a\.?\s?r\.?\s?l|\bs\.?\s?c\.?\s?a\b|\bs\.?\s?a\b|\be\.?\s?k\b",
     re.IGNORECASE,
 )
 
@@ -103,8 +105,10 @@ def _stop_wort(wort: str) -> bool:
     return (wl in _STOP) or (wl in _MARKEN) or _hat_marker_frag(wort)
 
 
-# Sequenz aus Namensworten (case-insensitiv): 2+ Buchstaben ODER Initiale "A.".
-_TOKEN = r"(?:[A-Za-zÄÖÜäöüß]{2,}\.?|[A-ZÄÖÜ]\.)"
+# Sequenz aus Namensworten (case-insensitiv). Ein Token ist: ein Akronym mit
+# Punkten (S.C.A., S.a.r.l. -- bleibt so am Firmennamen kleben), ein Wort
+# (2+ Buchstaben) oder eine Initiale ("A.").
+_TOKEN = r"(?:[A-ZÄÖÜ](?:\.[A-Za-zÄÖÜ]){1,4}\.?|[A-Za-zÄÖÜäöüß]{2,}\.?|[A-ZÄÖÜ]\.)"
 _SEQ_RE = re.compile(rf"{_TOKEN}(?:[ ]{_TOKEN})*")
 
 
@@ -159,27 +163,52 @@ def anonymisiere_text(text: str, feld: bool = False) -> str:
         return text
     text = maskiere_iban(text)
     text = maskiere_bic(text)
+    # FIX C: Enthaelt das reine Empfaengerfeld einen Firmen-Marker, gilt der
+    # GESAMTE Empfaenger als Firma -> keine Teil-Schwaerzung im Firmennamen.
+    if feld and _ist_firma_span(text):
+        return text
     text = _maskiere_personen(text, min_len=1 if feld else 2)
     return text
 
 
 def anonymisiere_buchungen(buchungen: List[Buchung]) -> List[Buchung]:
-    """Liefert ANONYMISIERTE KOPIEN der Buchungen (Original bleibt unveraendert)."""
+    """Liefert ANONYMISIERTE KOPIEN der Buchungen (Original bleibt unveraendert).
+
+    FIX D: Der erkannte Personenname wird in ALLEN Feldern derselben Buchung
+    getilgt -- Empfaenger, Verwendungszweck_voll UND Referenzfeldern.
+    """
     kopien = []
     for b in buchungen:
         k = copy.copy(b)
         name = _empfaenger_personname(b.empfaenger)
+
         # Empfaenger-Feld: auch Einzelnamen schwaerzen.
         k.empfaenger = anonymisiere_text(b.empfaenger, feld=True)
-        # Belegtext: IBAN/BIC maskieren, den konkreten Empfaenger-Namen (auch
-        # einzeln) tilgen, dann generischer 2-Wort-Namensdurchlauf.
-        zweck = maskiere_iban(b.verwendungszweck)
-        zweck = maskiere_bic(zweck)
+
+        # Belegtext: IBAN/BIC maskieren, konkreten Namen tilgen, dann
+        # generischer 2-Wort-Namensdurchlauf.
+        zweck = maskiere_bic(maskiere_iban(b.verwendungszweck))
         if name:
             zweck = _tilge_name(zweck, name)
         k.verwendungszweck = _maskiere_personen(zweck, min_len=2)
+
+        # Referenzfelder: IBAN/BIC maskieren + konkreten Namen tilgen
+        # (Zahlen bleiben, aber kein Name/keine IBAN durchgerutscht).
+        k.referenz = _feld_anon(b.referenz, name)
+        k.mandatsref = _feld_anon(b.mandatsref, name)
+        k.glaeubiger_id = _feld_anon(b.glaeubiger_id, name)
+        k.vertragsnr = _feld_anon(b.vertragsnr, name)
         kopien.append(k)
     return kopien
+
+
+def _feld_anon(text: str, name: str) -> str:
+    if not text:
+        return text
+    text = maskiere_bic(maskiere_iban(text))
+    if name:
+        text = _tilge_name(text, name)
+    return text
 
 
 def _tilge_name(text: str, name: str) -> str:
@@ -189,12 +218,32 @@ def _tilge_name(text: str, name: str) -> str:
     return muster.sub(PLATZHALTER, text)
 
 
+def _gruppen_anker(g) -> str:
+    """Nicht-personenbezogener Anker, damit verschiedene [NAME]-Gruppen
+    unterscheidbar bleiben (maskierte Referenz bzw. IBAN-Endziffern)."""
+    schluessel = getattr(g, "schluessel", "") or ""
+    if schluessel.startswith("ref:"):
+        tail = schluessel[4:][-4:]
+        return "Ref …" + tail if tail else ""
+    for b in getattr(g, "buchungen", []):
+        m = _IBAN_RE.search(b.verwendungszweck or "")
+        if m:
+            return "IBAN …" + re.sub(r"\s", "", m.group(0))[-4:]
+    return ""
+
+
 def anonymisiere_wiederkehrer(gruppen: list) -> list:
     """Anonymisiert den Anzeige-Empfaenger der Wiederkehrer-Gruppen (Personen
-    -> [NAME], Firmen bleiben). Betraege/Turnus/Klassifikation unveraendert."""
+    -> [NAME], Firmen bleiben). Verschiedene Personen bleiben ueber einen
+    maskierten Anker unterscheidbar (kein "[NAME]"-Sammeltopf).
+    Betraege/Turnus/Klassifikation unveraendert."""
     kopien = []
     for g in gruppen:
         k = copy.copy(g)
         k.empfaenger = anonymisiere_text(g.empfaenger, feld=True)
+        if PLATZHALTER in k.empfaenger:
+            anker = _gruppen_anker(g)
+            if anker:
+                k.empfaenger = f"{k.empfaenger} ({anker})"
         kopien.append(k)
     return kopien

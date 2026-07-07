@@ -287,9 +287,15 @@ Firmen bleiben — auch im Wiederkehrend-Sheet). Beide enthalten dieselben Sheet
 3. **Konsum** — Lebenshaltung/Tanken + monatlicher Durchschnitt je Kategorie.
 4. **Wiederkehrend** — deterministisch erkannte wiederkehrende Zahlungen:
    `Empfaenger | Art | Turnus | Anzahl | Erster | Letzter | Ø-Betrag | Summe |
-   Klassifikation | Betragsschwankung`. Klassifikation **SICHER** (≥3 Vorkommen
-   in regelmäßigem Abstand) oder **WAHRSCHEINLICH** (2 Vorkommen bzw. ≥3
-   unregelmäßig). *Betragsschwankung = ja* ist ein Preiserhöhungs-Hinweis.
+   Klassifikation | Betragsschwankung`. Gruppierung als **Kaskade**: primär
+   über eine stabile **Referenz** (Mandatsref/Vertragsnr) — gleiche Police mit
+   wechselnden Beträgen (z. B. `6,84`/`7,00`) bleibt **eine** Gruppe, der
+   Betrag ist nie ein harter Schlüssel; erst als Fallback (z. B.
+   Kartenzahlung ohne Referenz) über normalisierten Empfänger **und** ähnlichen
+   Betrag (±15 %) **und** regelmäßigen Abstand. Klassifikation **SICHER** (≥3
+   in regelmäßigem Abstand) oder **WAHRSCHEINLICH**. *Betragsschwankung = ja*
+   ist ein Preiserhöhungs-Hinweis. In der ANONYM-Datei werden Personen-Gruppen
+   über einen maskierten Anker (Ref-/IBAN-Endziffern) unterscheidbar gehalten.
 5. **Pruefen** — alle Buchungen mit Status `PRUEFEN` inkl. Saldo-Differenz.
 
 Zahlen sind **echte Zahlen** (Excel-Zahlenformat), Kopfzeile fett, **Autofilter
