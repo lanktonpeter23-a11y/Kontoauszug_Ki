@@ -222,6 +222,20 @@ def test_golden_master_liga():
     # Zeilen sind Gebuehren-UEBERNAHMEN der Bank, keine eigenen Buchungen).
     check(len(a.buchungen) == 61, f"exakt 61 Buchungen (ist {len(a.buchungen)})")
 
+    # OCR-Robustheit gegen die realen Verleser dieses internen OCR-Textes:
+    # (i) am Bu-Tag klebende Rausch-Ziffern ("907.01." -> 07.01.) -> GUTSCHRIFT
+    #     1.400,00 muss als Buchung erkannt sein.
+    check(any(round(b.betrag, 2) == 1400.00 for b in a.buchungen),
+          "GUTSCHRIFT 1.400,00 aus korruptem Bu-Tag '907.01.' erkannt")
+    # (ii) 'S' als '5' verlesen ("52,65 5") -> als Ausgabe (negativ) gewertet.
+    check(any(round(b.betrag, 2) == -52.65 for b in a.buchungen),
+          "'52,65 5' als Soll -52,65 gewertet (S als 5 verlesen)")
+    # (iii) Magnitudenfehler ("709,85" statt "70,85") ueber den Saldo-Checkpoint
+    #      eindeutig korrigiert.
+    korrekturen = [b for b in a.buchungen if "OCR-Korrektur" in b.vermerk]
+    check(len(korrekturen) == 1 and any(round(b.betrag, 2) == -70.85 for b in korrekturen),
+          f"genau 1 Checkpoint-Korrektur 709,85->70,85 ({len(korrekturen)} Korrektur(en))")
+
     print(f"     -> {len(a.buchungen)} Buchungen, Summe {summe}, "
           f"alt {a.saldo_alt} + Summe = {a.saldo_neu}, Status {a.status}")
 

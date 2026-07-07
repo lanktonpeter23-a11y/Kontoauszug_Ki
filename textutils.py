@@ -108,8 +108,14 @@ def finde_alle_betraege(zeile: str):
 # ---------------------------------------------------------------------------
 # DATEN
 # ---------------------------------------------------------------------------
-# dd.mm.  |  dd.mm.yy  |  dd.mm.yyyy   (Punkte, auch mit fehlender Endziffer)
-_DATE_RE = re.compile(r"\b(?P<d>[0-3]?\d)\.(?P<m>[01]?\d)\.(?P<y>\d{2,4})?")
+# dd.mm.  |  dd.mm.yy  |  dd.mm.yyyy
+# Tag/Monat sind auf gueltige Bereiche (01-31 / 01-12) begrenzt und OHNE \b,
+# damit auch ein am Bu-Tag "klebendes" OCR-Rausch-Zeichen ("907.01." ->
+# "07.01.", "99.01." -> "9.01.") uebersprungen und das echte Datum gefunden
+# wird -- ein "97" wuerde als Tag verworfen und "7.01." korrekt getroffen.
+_DATE_RE = re.compile(
+    r"(?P<d>0?[1-9]|[12]\d|3[01])\.(?P<m>0?[1-9]|1[0-2])\.(?P<y>\d{2,4})?"
+)
 
 
 def finde_datum_am_anfang(zeile: str) -> Optional[Tuple[int, int, Optional[int], int]]:
@@ -126,7 +132,11 @@ def finde_datum_am_anfang(zeile: str) -> Optional[Tuple[int, int, Optional[int],
         "31.12.2024 um 12:47:03 Uhr ..." und gehoeren zum Verwendungszweck.
     """
     m = _DATE_RE.search(zeile)
-    if not m or zeile[:m.start()].strip():   # vor dem Datum steht Text -> keine Buchung
+    # Vor dem Datum darf nur Leerraum stehen -- ODER hoechstens 1-3 Ziffern als
+    # OCR-Rauschen, die haeufig an den Bu-Tag "kleben" ("907.01.", "97.01.",
+    # "99.01.", "097.01." statt "07.01."/"09.01."). Buchstaben davor -> keine
+    # Buchung (Uebertrag/Kontostand/Referenz).
+    if not m or not re.fullmatch(r"\s*\d{0,3}", zeile[:m.start()]):
         return None
     # Lang-Datum (vierstelliges Jahr direkt dahinter) -> kein Bu-Tag.
     if m.group("y") and len(m.group("y")) == 4:

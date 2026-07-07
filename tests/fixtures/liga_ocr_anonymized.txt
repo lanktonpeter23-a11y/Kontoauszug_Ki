@@ -1,201 +1,89 @@
-4163
-
-011
-
-K 00037520
-5M 11
-
-LIGA BANK EG
-
-LIGCA @ BANK
-
-Dienstleister für die Kirche
-- seit 1917 -
-
+LIGA BANK
+Dienstleister fur dıe Kırche
+- seıtl 1917 -
 Kontokorrent
-EUR-Konto
-
-DR.-THEOBALD-SCHREMS-STR. 3, 93055 REGENSBURG Kontoauszug
-erstellt am 31.01.2025 21:47 Blatt
-
-Frau
-
-NAME
-
-Kontonummer 0000000
-
-Nr.
-
-424
-
-1/2025
-
-1 von 7
-
+EUR-Konto Kontonummer 0000000
+DR THEOBALD-SCHREMS-STR. 3, 93055 REGENSBURG Kontoauszug Nr. 1/2025
+erstellt am 31.01.2025 21:47 Blatt 1 von 7
 IBAN: DE00 0000 0000 0000 0000 00 BIC: BICXXXXX
-
-Ihr Kreditrahmen
-
+HE NAME Ihr Kreditrahmen 1.000,00
 ADRESSE
 ADRESSE
-
-Bu-Tag
-
-02.01.
-
-02.01.
-
-02.01.
-
-02.01.
-
-02.01.
-
-02.01.
-
-02.01.
-
-02.01.
-
-Wert
-
-02.
-
-02.
-
-02.
-
-02.
-
-02.
-
-02.
-
-02.
-
-02.
-
-01.
-
-01.
-
-01.
-
-01.
-
-01.
-
-01.
-
-01.
-
-01.
-
-Vorgang
-
-alter Kontostand vom 30.12.2024
-LASTSCHRIFT PN:931
+Bu-Tag Wert Vorgang
+alter Kontostand vom 30.12.2024 5.712,04 H
+02.01. 02.01. LASTSCHRIFT PN:931 6,84 S
 AXA Versicherung Aktiengesellschaft
 BOXflex REFNR BTR. 01/25 6,84. EUR EREF: REF
 53278/0001 MREF: REF CRED: REF
 IBAN: REF BIC: BICXXXXX
-LASTSCHRIFT PN:931
+02.01. 02.01. LASTSCHRIFT PN:931 7,00 S
 AXA Versicherung Aktiengesellschaft
 BOXflex REFNR BTR. 01/25 7,00. EUR EREF: REF
 53279/0001 MREF: REF CRED: REF
 IBAN: REF BIC: BICXXXXX
-EURO-UEBERWEISUNG PN:900
+02.01. 02.01. EURO-UEBERWEISUNG PN:900 10,00 S
 NAME
 Pflegeversicherung Anteil /*DA-10* IBAN: DE00000000000
 000000006 BIC: BICXXXXX
-LASTSCHRIFT PN:931
+02.01. 02.01. LASTSCHRIFT PN:931 15,30 S
 DANKE, IHR BIOMARKT
 REFNR ELV65023748 30.12 11.06 ME
 1 EREF: REF MREF: REF
 REFNR CRED: REF IBAN: DE00
 REFNR BIC: BICXXXXX
-LASTSCHRIFT PN:931
+02.01. 02.01. LASTSCHRIFT PN:931 21,06 S
 VERSICHERUNGSKAMMER BAYERN VERSICHERUNGSANSTALT D.0.R.
 KFZ KR-1133-5628 LA-WF 624 REF 01.01.202
 5 EREF: REF MREF: REF CRED: REF
-B00000157415 IBAN: REF BIC: BYLADEM
+REFNR IBAN: REF BIC: BYLADEM
 MXXX ABWA: Versicherungskammer Bayern
-EURO-UEBERWEISUNG PN:900
+02.01. 02.01. EURO-UEBERWEISUNG PN:900 25,00 S
 NAME
 VR-BONUSPLAN /*DA-1* IBAN: REF BIC:
 BICXXXXX
-LASTSCHRIFT PN:931
+02.01. 02.01. LASTSCHRIFT PN:931 34,94 S
 AMAZON EU S.A R.L., NIEDERLASSUNG DEUTSCHLAND
 028-9799304-4225146 Amazon.de REF EREF: REF
 REF MREF: REF C
 RED: REF IBAN: REF B
 IC: BICXXXXX
-EURO-UEBERWEISUNG PN:900
+02.01. 02.01. EURO-UEBERWEISUNG PN:900 40,00 S
 NAME
+Übertrag auf Blatt 2 5.551,90 H
+4163
+011
+X 00037520 Bitte beachten Sie die Hinweise auf der Rückseite oder am Ende des Dokuments
 
-Übertrag auf Blatt 2
-
-Bitte beachten Sie die Hinweise auf der Rückseite oder am Ende des Dokuments
-
-6,84 S
-
-7,00 S
-
-10,00 S
-
-15,30 S
-
-21,06 S
-
-25,00 S
-
-34,94 S
-
-40,00 S
-
-1.000,00
-
-5.712,04 H
-
-5.551,90 H
 ===SEITENENDE===
-LIGCA @ BANK
-
-Dienstleister für die Kirche
-- seit 1917 -
-
+LIGA BANK
+Dienstleister fur dıe Kırche
+- seıtl 1917 -
 Kontokorrent
-
 EUR-Konto Kontonummer 0000000
 NAME
-
 Kontoauszug Nr. 1/2025
-
 erstellt am 31.01.2025 21:47 Blatt 2 von 7
-
 Bu-Tag Wert Vorgang
-
 Übertrag von Blatt 1 5.551,90 H
 SPARRATE /*DA-2* IBAN: REF BIC: GEN
 ODEF1DST
-02.01. 02.01. LASTSCHRIFT PN:931 52,65 S
-
+02.01. 02.01. LASTSCHRIFT PN:931 52,65 5
 DANKE, IHR BIOMARKT
 REFNR ELV65023747 30.12 11.18 ME
 1 EREF: REF MREF: REF
 REFNR CRED: REF IBAN: DE00
 REFNR BIC: BICXXXXX
-02.01. 02.01. LASTSCHRIFT PN:931 56,85 S
+02.01. 02.01. LASTSCHRIFT PN:931 56,85 5
 AMAZON PAYMENTS EUROPE S.C.A.
 028-9619545-3899502 AMZN Mktp DE REF EREF
 : REF MREF: REF
 j CRED: REF IBAN: REF
 6 BIC: BICXXXXX
-02.01. 02.01. LASTSCHRIFT PN:931 70,85 S
+02.01. 02.01. LASTSCHRIFT PN:931 709,85 S
 Swiss Life Lebensversicherung SE
 VS 9168037-8/768829645 Beitrag 01/2025
 Ihr Beitrag für ein selbstbestimmtes Leben EREF: REF
-168037-83/768829645 MREF: REF CRED: REF
+168037-8/768829645 MREF: REF CRED: REF
 2672789 IBAN: REF BIC: BICXXXXX
 02.01. 02.01. Kartenzahlung girocard PN:931 73,00 S
 Ternion Cafe
@@ -210,7 +98,7 @@ BUCHHANDLUNG RUPPRE/ROSENHEIM/DE
 02.01. 02.01. EURO-UEBERWEISUNG PN:900 125,00 S
 NAME
 Anteil ETW Sudetenstraße /*DA-21* IBAN: REF
-00000000 BIC: GENODEF1INGG
+00000000 BIC: BICXXXXX
 02.01. 02.01. Kartenzahlung Maestro PN:931 173,40 S
 DZ BANK AG
 Zettle-.amon gmbh/Wendelsteinstr. 2/PRIEN/DE/0
@@ -225,36 +113,27 @@ BICXXXXX
 NAME
 Pflicht.RST /*DA-7* IBAN: REF BIC:
 BICXXXXX
-
 Übertrag auf Blatt 3 4.431,26 H
-
 4163
 011
+K 00037520 Bitte beachten Sie die Hinweise auf der Rückseite oder am Ende des Dokuments
 
-K00037520 Bitte beachten Sie die Hinweise auf der Rückseite oder am Ende des Dokuments
 ===SEITENENDE===
-LIGCA @ BANK
-
-Dienstleister für die Kirche
-- seit 1917 -
-
+LIGA BANK
+Dienstleister fur dıe Kırche
+- seıtl 1917 -
 Kontokorrent
-
 EUR-Konto Kontonummer 0000000
 NAME
-
 Kontoauszug Nr. 1/2025
-
 erstellt am 31.01.2025 21:47 Blatt 3 von 7
-
 Bu-Tag Wert Vorgang
-
 Übertrag von Blatt 2 4.431,26 H
-02.01. 02.01. EURO-UEBERWEISUNG PN:900 450,00 S
+02.01. 02.01. EURO-VUVEBERWEISUNG PN:900 450,00 S
 NAME
 Mtl. Abgrzg /*DA-19* IBAN: REF BIC:
 BICXXXXX
-02.01. 02.01. EURO-UEBERWEISUNG PN:900 1.224,00 S
+02.01. 02.01. EURO-VUVEBERWEISUNG PN:900 1.224,00 S
 NAME
 Pattendorf Genobank /*DA-15* IBAN: REF
 000 BIC: BICXXXXX
@@ -266,64 +145,55 @@ BUCHHANDLUNG FABULA E. K./Wasserburg/DE
 03.01. 03.01. Auszahlung girocard PN:931 500,00 S
 MEINE VOLKSBANK RAIFFBK
 Prien (GA)/Prien a. Ch/DE
-03.01.2025 um 10:32:39 Uhr GA 71160000/00008910/010269
+93.01.2025 um 10:32:39 Uhr GA 71160000/00008910/010269
 75090300/REFNR/1/1228 REF 056089/260023
 Geb.Uebernahme LIGA: 1,02
-07.01. 07.01. GUTSCHRIFT PN:801 1.400,00 H
+907.01. 07.01. GUTSCHRIFT PN:801 1.400,00 H
 NAME
 uvebertrag
-07.01. 07.01. LASTSCHRIFT PN:931 1,99 S
+97.01. 07.01. LASTSCHRIFT PN:931 1,99 S
 AMAZON DIGITAL GERMANY GMBH
 DO1-0384541-9275809 Prime Video TVOD REF
 EREF: REF MREF: REF
 7184j CRED: REF IBAN: REF
 11001 BIC: BICXXXXX
-07.01. 07.01. LASTSCHRIFT PN:931 1,99 S
+97.01. 07.01. LASTSCHRIFT PN:931 1,99 S
 AMAZON DIGITAL GERMANY GMBH
 DO01-7086377-3599007 Prime Video TVOD REF
 EREF: REF MREF: REF
 7184j CRED: REF IBAN: REF
 11001 BIC: BICXXXXX
-07.01. 07.01. LASTSCHRIFT PN:8414 31,98 S
+907.01. 07.01. LASTSCHRIFT PN:8414 31,98 S
 Card Process GmbH
 MASTERCARD Abrechnung EREF: REF MR
 EF: REF CRED: REF
 IBAN: REF BIC: BICXXXXX
-07.01. 07.01. Kartenzahlung girocard PN:931 58,35 S
+097.01. 07.01. Kartenzahlung girocard PN:931 58,35 5
 Drax-Muhle GmbH
 Drax-Muhle GmbH/Hochhaus 5/Rechtmehring/DE
 04.01.2025 um 10:01:27 Uhr 69702737/106884/CICC/FPIN
 75090300/REFNR/1/1228
-07.01. 07.01. EURO-UEBERWEISUNG PN:801 1.713,60 S
+907.01. 07.01. EURO-UVEBERWEISUNG PN:801 1.713,60 S
 NAME
 RE 2024.247 SecureGo plus IBAN: REF
 BIC: BICXXXXX
-
 Übertrag auf Blatt 4 1.813,35 H
-
 4163
 011
+K 00037520 Bitte beachten Sie die Hinweise auf der Rückseite oder am Ende des Dokuments
 
-K00037520 Bitte beachten Sie die Hinweise auf der Rückseite oder am Ende des Dokuments
 ===SEITENENDE===
-LIGCA @ BANK
-
-Dienstleister für die Kirche
-- seit 1917 -
-
+LIGA BANK
+Dienstleister fur dıe Kırche
+- seıtl 1917 -
 Kontokorrent
-
 EUR-Konto Kontonummer 0000000
 NAME
-
 Kontoauszug Nr. 1/2025
-
 erstellt am 31.01.2025 21:47 Blatt 4 von 7
-
 Bu-Tag Wert Vorgang
-
 Übertrag von Blatt 3 1.813,35 H
-08.01. 08.01. LASTSCHRIFT PN:931 6,42 S
+08.01. 08.01. LASTSCHRIFT PN:931 6,42 5
 AMAZON PAYMENTS EUROPE S.C.A.
 028-6255304-8620317 AMZN Mktp DE REF EREF
 : REF MREF: REF
@@ -335,15 +205,15 @@ VATTENFALL EUROPE SALES
 chlag EREF: REF MREF: REF
 03885551 CRED: REF IBAN: REF
 00000000 BIC: BICXXXXX
-09.01. 09.01. EURO-UEBERWEISUNG PN:801 30,00 S
+99.01. 09.01. EURO-UEBERWEISUNG PN:801 30,00 S
 NAME
 Prowin Klo. DAnke. SecureGo plus IBAN: REF
 0000000 BIC: BICXXXXX
-09.01. 09.01. EURO-UEBERWEISUNG PN:801 33,99 S
+99.01. 09.01. EURO-UEBERWEISUNG PN:801 33,99 S
 Farben Eckert
 RE1.12729 SecureGo plus IBAN: REF B
 IC: BICXXXXX
-09.01. 09.01. EURO-UEBERWEISUNG PN:801 119,90 S
+99.01. 09.01. EURO-UEBERWEISUNG PN:801 119,90 S
 vorwerk
 REFNR SecureGo plus IBAN: REF
 BIC: BICXXXXX
@@ -353,11 +223,11 @@ Festnetz Vertragskonto REFNR RG REFNR/30.12.
 2024 EREF: REF REFNR MREF: REF
 REFNR CRED: REF IBAN: D
 REF BIC: BICXXXXX
-13.01. 14.01. EURO-UEBERWEISUNG PN:801 215,00 S
+13.01. 14.01. EURO-VUEBERWEISUNG PN:801 215,00 S
 Fröschl Biohof
 offen aus 2024. DANKE. SecureGo plus IBAN: DE000000000
-REFNR BIC: GENODEF1LINP
-14.01. 14.01. LASTSCHRIFT PN:931 5,58 S
+REFNR BIC: BICXXXXX
+14.01. 14.01. LASTSCHRIFT PN:931 5,58 5
 AMAZON PAYMENTS EUROPE S.C.A.
 028-3741710-5828332 AMZN Mktp DE REF EREF
 : REF MREF: REF
@@ -371,30 +241,21 @@ hr Einkauf bei Vet-Concept GmbH + Co.KG EREF: REF
 0058 IBAN: REF BIC: PPLXLUL2
 15.01. 15.01. LASTSCHRIFT PN:931 19,30 S
 DEVK
-
 Übertrag auf Blatt 5 1.119,92 H
-
 4163
 011
+K 00037520 Bitte beachten Sie die Hinweise auf der Rückseite oder am Ende des Dokuments
 
-K00037520 Bitte beachten Sie die Hinweise auf der Rückseite oder am Ende des Dokuments
 ===SEITENENDE===
-LIGCA @ BANK
-
-Dienstleister für die Kirche
-- seit 1917 -
-
+LIGA BANK
+Dienstleister fur dıe Kırche
+- seıtl 1917 -
 Kontokorrent
-
 EUR-Konto Kontonummer 0000000
 NAME
-
 Kontoauszug Nr. 1/2025
-
 erstellt am 31.01.2025 21:47 Blatt 5 von 7
-
 Bu-Tag Wert Vorgang
-
 Übertrag von Blatt 4 1.119,92 H
 Z00013894157 Unfall EREF: REF MREF: REF
 2544 CRED: REF IBAN: REF
@@ -410,7 +271,7 @@ AMAZON PAYMENTS EUROPE S.C.A.
 : REF MREF: REF
 j CRED: REF IBAN: REF
 6 BIC: BICXXXXX
-20.01. 20.01. Kartenzahlung girocard PN:931 32,50 S
+20.01. 20.01. Kartenzahlung girocard PN:931 32,50 5
 SCHAUHI. . . PAPIERSACHEN
 Schauhi...Papiersachen/Regensburg/DE
 18.01.2025 um 12:44:31 Uhr 61468240/079068/ECTL/
@@ -444,163 +305,123 @@ REFNR MREF: REF CRED
 BICXXXXX ABWA: NAME//ROTTENB
 URG/DE
 23.01. 23.01. LASTSCHRIFT PN:931 18,72 S
-
 Übertrag auf Blatt 6 771,44 H
-
 4163
 011
+K 00037520 Bitte beachten Sie die Hinweise auf der Rückseite oder am Ende des Dokuments
 
-K00037520 Bitte beachten Sie die Hinweise auf der Rückseite oder am Ende des Dokuments
 ===SEITENENDE===
-LIGCA @ BANK
-
-Dienstleister für die Kirche
-- seit 1917 -
-
+LIGARS BANK
+Dienstleister fur dıe Kırche
+- seıtl 1917 -
 Kontokorrent
-
 EUR-Konto Kontonummer 0000000
 NAME
-
 Kontoauszug Nr. 1/2025
-
 erstellt am 31.01.2025 21:47 Blatt 6 von 7
-
 Bu-Tag Wert Vorgang
-
 Übertrag von Blatt 5 771,44 H
-
 AMAZON PAYMENTS EUROPE S.C.A.
 028-8546501-0886757 AMZN Mktp DE REF EREF
 : REF MREF: REF
 j CRED: REF IBAN: REF
 6 BIC: BICXXXXX
-
-23.01. 23.01. LASTSCHRIFT PN:931 26,76 S
+23.01. 23.01. LASTSCHRIFT PN:931 26,76 5
 AMAZON PAYMENTS EUROPE S.C.A.
 028-5640585-4560348 AMZN Mktp DE REF EREF
 : REF MREF: REF
 j CRED: REF IBAN: REF
 6 BIC: BICXXXXX
-
-23.01. 23.01. Kartenzahlung girocard PN:931 77,21 S
+23.01. 23.01. Kartenzahlung girocard PN:931 77,21 5
 Tankstelle
 Autoh.Nachtmann OHG/Rohr/DE
 22.01.2025 um 07:17:07 Uhr 74058909/087662/CICC/FPIN
 75090300/REFNR/1/1228 REF 661786/260023
-
 27.01. 27.01. GUTSCHRIFT PN:1234 7.874,36 H
 Finanzamt Eggenfelden Finanzkasse
 ERSTATT.132/756/02463 EST-VERANL. 23 EREF: REF
 63 EST-REF ABWA: FK EGGENFELDEN
-
 27.01. 27.01. LASTSCHRIFT PN:931 27,90 S
 AMAZON PAYMENTS EUROPE S.C.A.
 028-3054314-6756362 AMZN Mktp DE REF EREF
 : REF MREF: REF
 j CRED: REF IBAN: REF
 6 BIC: BICXXXXX
-
 27.01. 27.01. Kartenzahlung girocard PN:931 41,00 S
 DIE GLUECKL. LANDSH. GMBH
 DIE GLUECKL. LANDSH. GMBH GIR 69237854/LANDSHUT/DE
 25.01.2025 um 12:48:59 Uhr 69237854/018671/ECTL/
 75090300/REFNR/1/1228
-
 27.01. 27.01. Kartenzahlung girocard PN:931 43,94 S
 Friedrich Pustet Gmb
 FRIEDRICH PUSTET GMBH + CO/REGENSBURG/DE
 25.01.2025 um 10:15:45 Uhr 54236196/406239/CICC/FPIN
 75090300/REFNR/1/1228
-
 27.01. 27.01. Kartenzahlung girocard PN:931 107,79 S
 J.G. Woelfle GmbH u Co. KG
 J.G. WOELFLE GMBH + CO. KG/FREISING/DE
 25.01.2025 um 10:24:23 Uhr 54134420/018844/CICC/FPIN
 75090300/REFNR/1/1228
-
 27.01. 27.01. Auszahlung girocard PN:931 200,00 S
 Sparda-Bank M nchen
 Sparda-Bank Muenchen /18030 Spard/DE
 25.01.2025 um 10:28:50 Uhr GA 70090500/00018030/244870
 75090300/REFNR/1/1228 REF 262425/260023
 Geb.Uebernahme LIGA: 1,02
-
 27.01. 27.01. Kartenzahlung girocard PN:931 410,00 S
-
 Übertrag auf Blatt 7 7.711,20 H
-
 4163
 011
+K 00037520 Bitte beachten Sie die Hinweise auf der Rückseite oder am Ende des Dokuments
 
-K00037520 Bitte beachten Sie die Hinweise auf der Rückseite oder am Ende des Dokuments
 ===SEITENENDE===
-LIGCA @ BANK
-
-Dienstleister für die Kirche
-- seit 1917 -
-
+LIGA BANK
+Dienstleister fur dıe Kırche
+- seıtl 1917 -
 Kontokorrent
-
 EUR-Konto Kontonummer 0000000
 NAME
-
 Kontoauszug Nr. 1/2025
-
 erstellt am 31.01.2025 21:47 Blatt 7 von 7
-
 Bu-Tag Wert Vorgang
-
 Übertrag von Blatt 6 7.711,20 H
-
 KLAUS SCHREIBWAREN
 KLAUS SCHREIBWAREN/Freising/DE
 25.01.2025 um 11:04:08 Uhr 60377165/2719/ECTL/NPIN
 75090300/REFNR/1/1228 REF 392134/260023
-
 28.01. 28.01. Kartenzahlung girocard PN:931 74,01 S
 Tankstelle
 Autoh.Nachtmann OHG/Rohr/DE
 27.01.2025 um 17:32:23 Uhr 74058925/065237/CICC/FPIN
 75090300/REFNR/1/1228
-
-28.01. 28.01. LASTSCHRIFT PN:38414 133,93 S
+28.01. 28.01. LASTSCHRIFT PN:8414 133,93 S
 Card Process GmbH
 MASTERCARD Abrechnung EREF: REF MR
 EF: REF CRED: REF
 IBAN: REF BIC: BICXXXXX
-
 29.01. 29.01. EURO-UEBERWEISUNG PN:801 110,00 S
 vhs Rottenburg Laaber
-R24 S03 NAME SecureGo plus IBAN: REF
+R24 SO03 NAME SecureGo plus IBAN: REF
 0000000 BIC: BICXXXXX
-
 29.01. 29.01. EURO-UEBERWEISUNG PN:801 220,32 S
 Rundfunk ARD ZFD Radio
 REF SecureGo plus IBAN: REF
 000 BIC: BICXXXXX
-
 30.01. 30.01. LOHN/GEHALT PN:1234 4.596,24 H
 Kromberg + Schubert Automotive GmbH + Co. KG
 LOHN / GEHALT 01/25 EREF: REF
-0000
-
+9000
 31.01. 31.01. LASTSCHRIFT PN:931 88,00 S
-
 Energie Suedbayern Gm
-
 REFNR Kd 0000000 ADRESSE Abschlag 01/2
-
 025 88,00 EREF: REF MREF: REF
 CRED: REF IBAN: REF
 BIC: BICXXXXX
-
 neuer Kontostand vom 31.01.2025 11.681,18 H
-
 4163
 011
+K 00037520 Bitte beachten Sie die Hinweise auf der Rückseite oder am Ende des Dokuments
 
-K00037520 Bitte beachten Sie die Hinweise auf der Rückseite oder am Ende des Dokuments
 ===SEITENENDE===
 Sehr geehrte Kundin, sehr geehrter Kunde,
 
@@ -611,7 +432,6 @@ Sie Ihre Bankmitteilung "richtig lesen", haben wir diese nützlichen Hinweise f�
 Falls in diesem Dokument Bankdienstleistungen aufgeführt sind, sind diese umsatzsteuerfrei - sofern nichts Abweichendes angegeben
 ist. Der im Kontoauszug ausgewiesene Betrag muss nicht dem tatsächlichen Kontoguthaben entsprechen, weil z. B. die Wertstellung
 einzelner Buchungen nicht berücksichtigt wurde oder noch Zinsen für eine Kontoüberziehung bei einer Verfügung anfallen können.
-
 Rechnungsabschlüsse
 
 Ihr Kontoauszug ist mit dem Hinweis "Rechnungsabschluss" versehen?
@@ -640,11 +460,12 @@ gemacht wird. Barschecks sind bereits mit Zahlung an den Scheckvorleger eingelö
 wenn wir im Einzelfall eine Bezahltmeldung absenden.
 
 Guthaben
+
 Guthaben sind als Einlagen nach Maßgabe des Einlagensicherungsgesetzes entschädigungsfähig. Nähere Informationen können dem
-“"Informationsbogen für den Einleger" entnommen werden.
+"Informationsbogen für den Einleger" entnommen werden.
 
 Sie haben noch Fragen? Dann kontaktieren Sie uns bitte. Wir sind gern für Sie da.
 
 Mit freundlichen Grüßen
+
 Ihre Bank
-===SEITENENDE===

@@ -118,9 +118,13 @@ def parse_auszug(ocr_text: str, quelle_pdf: str, profile: List[Dict[str, Any]]) 
         if not seite.strip():
             continue
         if _ist_delaminiert(seite):
-            auszug.buchungen.extend(_parse_delaminiert(seite, auszug, ausschluss))
+            seiten_buchungen = _parse_delaminiert(seite, auszug, ausschluss)
         else:
-            auszug.buchungen.extend(_parse_buchungen(seite, auszug, profil))
+            seiten_buchungen = _parse_buchungen(seite, auszug, profil)
+        # Bank-Running-Balance als Grundwahrheit: einzelne OCR-Betragsfehler,
+        # die die Seiten-Uebertragsrechnung sprengen, deterministisch korrigieren.
+        _korrigiere_seite_per_checkpoint(seite, seiten_buchungen)
+        auszug.buchungen.extend(seiten_buchungen)
 
     _smart_year(auszug)
     return auszug
@@ -296,7 +300,20 @@ def _betrag_und_zweck(zeile: str, datum_ende: int, laufend: bool):
     if not betraege:
         return None, zeile[datum_ende:].strip(), False
     idx = -2 if (laufend and len(betraege) >= 2) else -1
-    betrag, start, _ende, explizit = betraege[idx]
+    betrag, start, ende, explizit = betraege[idx]
+
+    # OCR-KORREKTUR S/H-Spalte: Steht am Zeilenende hinter dem Betrag KEIN
+    # sauberes S/H (explizit=False), aber ein einzelnes Zeichen, das das OCR
+    # oft aus "S" verliest (5, $, §, s), gilt es als Soll (Ausgabe, negativ);
+    # ein einzelnes "H"/"h" als Haben (Einnahme, positiv). Das S/H steht in
+    # diesem Layout immer ganz rechts.
+    if not explizit:
+        tail = zeile[ende:].strip()
+        if re.fullmatch(r"[5sS$§]", tail):
+            betrag, explizit = -abs(betrag), True
+        elif re.fullmatch(r"[hH]", tail):
+            betrag, explizit = abs(betrag), True
+
     zweck = zeile[datum_ende:start].strip()
     # Fuehrende zweite Datumsangabe (Wertstellung) aus dem Zweck entfernen.
     zweck = re.sub(r"^\d{1,2}\.\d{1,2}\.(\d{2,4})?\s*", "", zweck).strip()
@@ -420,6 +437,72 @@ def _parse_delaminiert(seite: str, auszug: Auszug, ausschluss: set) -> List[Buch
         b = _bau_buchung(auszug, tag, monat, jahr, zweck, betrag, True, zweck or "delaminiert")
         buchungen.append(b)
     return buchungen
+
+
+# ---------------------------------------------------------------------------
+# CHECKPOINT-KORREKTUR: die Bank-Uebertragsrechnung je Seite als Grundwahrheit
+# ---------------------------------------------------------------------------
+_UEBERTRAG_LINE_RE = re.compile(r"[uü]e?bertrag", re.IGNORECASE)
+
+
+def _ziffer_loesch_varianten(betrag: float):
+    """Alle Betraege, die durch Loeschen GENAU EINER Ziffer entstehen.
+
+    Deckt den haeufigsten OCR-Magnitudenfehler ab: eine faelschlich
+    eingefuegte Ziffer (z.B. "709,85" statt "70,85"). Vorzeichen bleibt.
+    """
+    cent = str(int(round(abs(betrag) * 100)))
+    sign = -1.0 if betrag < 0 else 1.0
+    varianten = set()
+    for i in range(len(cent)):
+        rest = cent[:i] + cent[i + 1:]
+        if rest:
+            varianten.add(round(sign * int(rest) / 100.0, 2))
+    return varianten
+
+
+def _korrigiere_seite_per_checkpoint(seite: str, buchungen: List[Buchung]) -> None:
+    """Korrigiert EINEN OCR-Betragsfehler je Seite anhand der Uebertragsrechnung.
+
+    Grundwahrheit ist die Running-Balance der Bank: Start-Checkpoint
+    (alter Kontostand / Uebertrag von) + Summe der Seiten-Buchungen =
+    End-Checkpoint (Uebertrag auf / neuer Kontostand). Geht die Rechnung nicht
+    auf und schliesst GENAU EINE Einzelziffer-Loeschung EINER Buchung die
+    Luecke exakt, wird sie angewandt (mit Vermerk). Sonst bleibt alles
+    unveraendert -> die Kontrollschicht meldet PRUEFEN.
+
+    Nur bei echter Uebertrags-Struktur (mehrseitige Auszuege). Einseitige
+    Auszuege ohne "Uebertrag"-Zeilen werden NIE automatisch korrigiert.
+    """
+    if not _UEBERTRAG_LINE_RE.search(seite):
+        return
+    carry = []
+    for z in seite.splitlines():
+        if _ist_carry_zeile(z):
+            betr = finde_alle_betraege(z)
+            if betr:
+                carry.append(round(betr[-1][0], 2))
+    if len(carry) < 2:
+        return
+
+    delta = round(carry[-1] - carry[0], 2)                 # End - Start
+    summe = round(sum(b.betrag for b in buchungen if b.betrag is not None), 2)
+    luecke = round(delta - summe, 2)
+    if abs(luecke) <= 0.005:
+        return
+
+    kandidaten = []
+    for b in buchungen:
+        if b.betrag is None:
+            continue
+        for v in _ziffer_loesch_varianten(b.betrag):
+            if round(v - b.betrag, 2) == luecke:
+                kandidaten.append((b, v))
+    if len(kandidaten) == 1:                                # nur bei EINDEUTIGKEIT
+        b, v = kandidaten[0]
+        b.vermerk = (f"OCR-Korrektur via Saldo-Checkpoint: "
+                     f"{b.betrag:.2f} -> {v:.2f}")
+        b.betrag = v
 
 
 def _vorgang_segmente(zeilen: List[str]) -> List[str]:

@@ -315,15 +315,27 @@ python textutils.py     # prüft die deutsche Betrags-/Datumserkennung
 python test_parser.py   # Unit-Tests + GOLDEN-MASTER gegen echten LIGA-Auszug
 ```
 
-`test_parser.py` enthält einen **Golden-Master-Test** gegen einen echten
-(anonymisierten) 7-seitigen LIGA-BANK-Auszug
-(`tests/fixtures/liga_ocr_anonymized.txt`). Er ist **Pflicht-Test für jede
-Parser-Änderung**: der komplette Auszug muss cent-genau auf `OK` gehen
-(alter Saldo + Summe = neuer Saldo). Die Fixture wurde mit
+`test_parser.py` enthält einen **Golden-Master-Test** gegen den echten,
+intern erzeugten OCR-Text (nach Pillow-Vorverarbeitung) eines 7-seitigen
+LIGA-BANK-Auszugs (`tests/fixtures/liga_ocr_anonymized.txt`). Er ist
+**Pflicht-Test für jede Parser-Änderung**: der komplette Auszug muss
+cent-genau auf `OK` gehen (alter Saldo + Summe = neuer Saldo). Die Fixture
+enthält bewusst die realen OCR-Verleser (am Bu-Tag klebende Rausch-Ziffern
+wie `907.01.`, `S`→`5` in der Soll/Haben-Spalte, ein Magnitudenfehler
+`709,85` statt `70,85`), die der Parser robust behandeln muss. Sie wurde mit
 `tools/anonymize_ocr.py` von personenbezogenen Daten befreit (Namen → `NAME`,
 IBANs/Referenzen maskiert), während Beträge, S/H-Kennzeichen, Datumsformate
-und die komplette Zeilenstruktur (inkl. der OCR-delaminierten Seite 1)
-**unverändert** bleiben.
+und die komplette Zeilenstruktur **unverändert** bleiben.
+
+**Robustheit gegen OCR-Fehler:** Der Parser toleriert am Bu-Tag klebende
+Rausch-Ziffern (`907.01.` → `07.01.`), liest ein als `5`/`$`/`§` verlesenes
+`S` als Soll (Ausgabe), und korrigiert einen einzelnen Magnitudenfehler je
+Seite **deterministisch über die Übertrags-/Kontostand-Checkpoints der Bank**:
+Geht die Seiten-Running-Balance (Start + Σ Buchungen = Ende) nicht auf und
+schließt genau eine Einzelziffer-Korrektur einer Buchung die Lücke exakt, wird
+sie mit Vermerk angewandt. Ist die Korrektur nicht eindeutig, bleibt es bei
+`PRUEFEN` — nie wird still geraten. Einseitige Auszüge ohne Übertrags-Struktur
+werden nie automatisch korrigiert.
 
 ## Dateien
 

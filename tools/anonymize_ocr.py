@@ -36,6 +36,7 @@ _PERSONENNAMEN = [
     "Marc Polednik",
     "A. Neumann",
     "Puralei Monika Pernstecher", "Puralei Monika Pe", "Monika Pernstecher",
+    "Weinzierl", "WEINZIERL",   # bare Nachname (z.B. "HE Weinzierl")
 ]
 
 _ADRESSEN = [
