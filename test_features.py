@@ -12,14 +12,15 @@ Aufruf:  python test_features.py
 """
 
 import os
+import re
 import tempfile
 from datetime import date, datetime
 
-from anonymisierung import anonymisiere_text
+from anonymisierung import anonymisiere_buchungen, anonymisiere_text
 from buchungsart import extrahiere_art
 from journalfelder import extrahiere_felder
 from models import Buchung
-from wiederkehrer import finde_wiederkehrer
+from wiederkehrer import finde_wiederkehrer, normalisiere_empfaenger
 
 _fehler = 0
 
@@ -153,6 +154,54 @@ def test_f_kein_ueberlauf():
     check(ws.freeze_panes == "A2", "erste Zeile fixiert")
 
 
+def test_g_anonymisierung_hart():
+    print("\n== g) Anonymisierung gehärtet: Groß-/Kleinschreibung, keine Leaks ==")
+    # Gleiche Person in ALL-CAPS / lower / Title -> alle [NAME].
+    for v in ("ULRIKE WEINZIERL", "ulrike weinzierl", "Ulrike Weinzierl"):
+        t = anonymisiere_text(f"EURO-UEBERWEISUNG PN:900 {v} IBAN: DE66750905000990099716")
+        check("[NAME]" in t and "WEINZIERL" not in t.upper(), f"'{v}' -> [NAME]")
+    # ALL-CAPS ist KEIN Firmenmarker mehr.
+    t2 = anonymisiere_text("GUTSCHRIFT PN:1234 ALEXANDER NEUMANN")
+    check("[NAME]" in t2 and "NEUMANN" not in t2.upper(), "'ALEXANDER NEUMANN' (all-caps) -> [NAME]")
+    # Echte Firma bleibt.
+    f = anonymisiere_text("LASTSCHRIFT PN:931 AXA Versicherung AG IBAN: DE04300500000000444166")
+    check("AXA Versicherung AG" in f, "Firma 'AXA Versicherung AG' bleibt")
+
+    # Blockliste: nach Anonymisierung darf KEIN Klarname mehr vorkommen.
+    namen = ["WEINZIERL", "NEUMANN", "NEPPL", "POLEDNIK", "PERNSTECHER",
+             "HUBER", "DUSL", "WAMSLER"]
+    proben = [
+        Buchung(konto="X", datum=date(2025, 1, 2), betrag=-40.0,
+                empfaenger="ULRIKE WEINZIERL",
+                verwendungszweck="EURO-UEBERWEISUNG PN:900 ULRIKE WEINZIERL IBAN: DE9075062026"),
+        Buchung(konto="X", datum=date(2025, 1, 2), betrag=-10.0,
+                empfaenger="Veronika Weinzierl Pflegeversicherung",
+                verwendungszweck="EURO-UEBERWEISUNG PN:900 Veronika Weinzierl Pflegeversicherung"),
+        Buchung(konto="X", datum=date(2025, 1, 2), betrag=-180.0, empfaenger="Sabine Neppl",
+                verwendungszweck="EURO-UEBERWEISUNG PN:900 Sabine Neppl HuTa"),
+        Buchung(konto="X", datum=date(2025, 1, 7), betrag=-1713.6, empfaenger="Marc Polednik",
+                verwendungszweck="EURO-UEBERWEISUNG PN:801 Marc Polednik RE 2024"),
+        Buchung(konto="X", datum=date(2025, 1, 9), betrag=-30.0, empfaenger="Kristina Huber",
+                verwendungszweck="EURO-UEBERWEISUNG PN:801 Kristina Huber Prowin"),
+        Buchung(konto="X", datum=date(2025, 1, 23), betrag=-17.9, empfaenger="Wamsler",
+                verwendungszweck="EURO-UEBERWEISUNG PN:801 Wamsler RE"),
+        Buchung(konto="X", datum=date(2025, 1, 29), betrag=-110.0, empfaenger="vhs Rottenburg",
+                verwendungszweck="EURO-UEBERWEISUNG PN:801 vhs Rottenburg R24 Alexander Neumann"),
+    ]
+    anon = anonymisiere_buchungen(proben)
+    text_all = " || ".join(k.verwendungszweck + " | " + k.empfaenger for k in anon)
+    leaks = [n for n in namen if re.search(rf"\b{n}\b", text_all, re.IGNORECASE)]
+    check(not leaks, f"ANONYM-Ausgabe enthält keinen Klarnamen (Leaks: {leaks})")
+
+
+def test_h_normalisierung_konsistent():
+    print("\n== h) Wiederkehrer-Normalisierung case-insensitiv (FEHLER 3) ==")
+    a = normalisiere_empfaenger("EURO-UEBERWEISUNG PN:900 ULRIKE WEINZIERL Miete")
+    b = normalisiere_empfaenger("EURO-UEBERWEISUNG PN:900 Ulrike Weinzierl Miete")
+    c = normalisiere_empfaenger("euro-ueberweisung pn:900   ulrike   weinzierl   miete")
+    check(a == b == c and a != "", f"gleiche Person -> gleicher Schluessel ('{a}')")
+
+
 if __name__ == "__main__":
     test_a_anonymisierung()
     test_b_referenzen()
@@ -160,5 +209,7 @@ if __name__ == "__main__":
     test_d_wiederkehrer()
     test_e_excel_input()
     test_f_kein_ueberlauf()
+    test_g_anonymisierung_hart()
+    test_h_normalisierung_konsistent()
     print("\n" + ("Alle Feature-Tests bestanden." if _fehler == 0 else f"{_fehler} FEHLER!"))
     raise SystemExit(1 if _fehler else 0)
