@@ -45,7 +45,8 @@ _RAHMEN = Border(left=_DUENN, right=_DUENN, top=_DUENN, bottom=_DUENN)
 # Reihenfolge der Felder im versteckten Persistenz-Blatt "_Daten".
 _DATEN_SPALTEN = [
     "konto", "datum", "verwendungszweck", "betrag", "status", "kategorie",
-    "typ", "empfaenger", "turnus", "vermerk", "auszug_differenz",
+    "typ", "art", "empfaenger", "referenz", "mandatsref", "glaeubiger_id",
+    "vertragsnr", "turnus", "vermerk", "auszug_differenz",
     "vorzeichen_unsicher", "quelle_pdf",
 ]
 _DATEN_BLATT = "_Daten"
@@ -94,7 +95,12 @@ def _zeile_zu_buchung(row, idx: Dict[str, int]) -> Buchung:
         status=str(g("status")),
         kategorie=str(g("kategorie")),
         typ=str(g("typ")),
+        art=str(g("art")),
         empfaenger=str(g("empfaenger")),
+        referenz=str(g("referenz")),
+        mandatsref=str(g("mandatsref")),
+        glaeubiger_id=str(g("glaeubiger_id")),
+        vertragsnr=str(g("vertragsnr")),
         turnus=str(g("turnus")),
         vermerk=str(g("vermerk")),
         auszug_differenz=float(g("auszug_differenz", 0) or 0),
@@ -144,8 +150,14 @@ def _sortiere(buchungen: List[Buchung]) -> List[Buchung]:
 # ===========================================================================
 # Schreiben
 # ===========================================================================
-def schreibe_excel(pfad: str, buchungen: List[Buchung]) -> None:
-    """Erzeugt die komplette Excel-Datei aus dem vollstaendigen Buchungssatz."""
+def schreibe_excel(pfad: str, buchungen: List[Buchung], wiederkehrer=None,
+                   mit_daten: bool = True) -> None:
+    """Erzeugt die komplette Excel-Datei aus dem vollstaendigen Buchungssatz.
+
+    ``wiederkehrer`` = Liste der WiederkehrerGruppe fuer das Sheet
+    "Wiederkehrend". ``mit_daten`` = False laesst das versteckte Persistenz-
+    Blatt "_Daten" weg (fuer die ANONYM-Datei, die nie Append-Quelle ist).
+    """
     buchungen = _sortiere(buchungen)
     wb = Workbook()
     wb.remove(wb.active)  # leeres Standardblatt entfernen
@@ -153,34 +165,56 @@ def schreibe_excel(pfad: str, buchungen: List[Buchung]) -> None:
     _sheet_journal(wb, buchungen)
     _sheet_fixkosten(wb, buchungen)
     _sheet_konsum(wb, buchungen)
+    _sheet_wiederkehrend(wb, wiederkehrer or [])
     _sheet_pruefen(wb, buchungen)
-    _sheet_daten(wb, buchungen)
+    if mit_daten:                       # _Daten nur in die VOLL-Datei (Append-Quelle)
+        _sheet_daten(wb, buchungen)
 
     os.makedirs(os.path.dirname(pfad), exist_ok=True)
     wb.save(pfad)
 
 
 # --- gemeinsame Helfer -----------------------------------------------------
+# wrap_text=False ueberall -> Text laeuft nicht um; feste Spaltenbreiten +
+# Autofilter halten die Darstellung sauber, ohne leere Zellen zu fuellen.
+_LINKS = Alignment(horizontal="left", vertical="center", wrap_text=False)
+
+
 def _schreibe_kopf(ws, spalten: List[str]) -> None:
     for c, titel in enumerate(spalten, start=1):
         zelle = ws.cell(row=1, column=c, value=titel)
         zelle.fill = _KOPF_FILL
         zelle.font = _KOPF_FONT
-        zelle.alignment = Alignment(horizontal="center", vertical="center")
-    ws.freeze_panes = "A2"
+        zelle.alignment = Alignment(horizontal="center", vertical="center", wrap_text=False)
+    ws.freeze_panes = "A2"                       # erste Zeile fixieren
+
+
+def _finalisiere(ws, n_spalten: int) -> None:
+    """Autofilter ueber den benutzten Bereich (Kopfzeile bleibt fixiert)."""
+    letzte = max(1, ws.max_row)
+    ws.auto_filter.ref = f"A1:{get_column_letter(n_spalten)}{letzte}"
 
 
 def _geldzelle(ws, row, col, wert) -> None:
+    """Betrag als echte Zahl. None/'' -> Zelle bleibt ECHT leer (summierbar)."""
+    if wert is None:
+        return
     z = ws.cell(row=row, column=col, value=round(wert, 2))
     z.number_format = GELD_FORMAT
 
 
 def _datumzelle(ws, row, col, d) -> None:
     if d is None:
-        ws.cell(row=row, column=col, value="")
-        return
+        return                                   # echt leer lassen (kein "")
     z = ws.cell(row=row, column=col, value=datetime(d.year, d.month, d.day))
     z.number_format = DATUM_FORMAT
+
+
+def _textzelle(ws, row, col, wert) -> None:
+    """Text nur schreiben, wenn vorhanden -- sonst Zelle ECHT leer lassen."""
+    if wert:
+        z = ws.cell(row=row, column=col, value=str(wert))
+        z.alignment = _LINKS
 
 
 def _spaltenbreiten(ws, breiten: Dict[int, int]) -> None:
@@ -191,27 +225,37 @@ def _spaltenbreiten(ws, breiten: Dict[int, int]) -> None:
 # --- SHEET 1: Journal ------------------------------------------------------
 def _sheet_journal(wb: Workbook, buchungen: List[Buchung]) -> None:
     ws = wb.create_sheet("Journal")
-    spalten = ["Kontonummer", "Datum", "Verwendungszweck", "Einnahme",
-               "Ausgabe", "Typ", "Status"]
+    spalten = ["Datum", "Art", "Empfaenger", "Einnahme", "Ausgabe", "Typ",
+               "Status", "Referenz", "Mandatsref", "Glaeubiger-ID",
+               "Vertrags-/Kundennr", "Verwendungszweck_voll"]
     _schreibe_kopf(ws, spalten)
 
     r = 2
     for b in buchungen:
-        ws.cell(row=r, column=1, value=b.konto)
-        _datumzelle(ws, r, 2, b.datum)
-        ws.cell(row=r, column=3, value=b.verwendungszweck)
-        # Einnahme als Pluswert, Ausgabe als Minuswert -- anderes Feld leer.
+        _datumzelle(ws, r, 1, b.datum)
+        _textzelle(ws, r, 2, b.art)
+        _textzelle(ws, r, 3, b.empfaenger)
+        # Einnahme als Pluswert, Ausgabe als Minuswert -- das jeweils andere
+        # Feld bleibt ECHT leer (None), damit Summen/Autofilter sauber sind.
         if b.betrag >= 0:
             _geldzelle(ws, r, 4, b.betrag)
         else:
             _geldzelle(ws, r, 5, b.betrag)
-        ws.cell(row=r, column=6, value=b.typ)
+        _textzelle(ws, r, 6, b.typ)
         z = ws.cell(row=r, column=7, value=b.status)
+        z.alignment = _LINKS
         if b.status == STATUS_PRUEFEN:
             z.font = Font(bold=True, color="C00000")
+        _textzelle(ws, r, 8, b.referenz)
+        _textzelle(ws, r, 9, b.mandatsref)
+        _textzelle(ws, r, 10, b.glaeubiger_id)
+        _textzelle(ws, r, 11, b.vertragsnr)
+        _textzelle(ws, r, 12, b.verwendungszweck)   # Originaltext als Beleg
         r += 1
 
-    _spaltenbreiten(ws, {1: 24, 2: 12, 3: 50, 4: 14, 5: 14, 6: 12, 7: 20})
+    _spaltenbreiten(ws, {1: 12, 2: 7, 3: 30, 4: 13, 5: 13, 6: 11, 7: 20,
+                         8: 20, 9: 18, 10: 20, 11: 22, 12: 70})
+    _finalisiere(ws, len(spalten))
 
 
 # --- SHEET 2: Fixkosten ----------------------------------------------------
@@ -260,6 +304,7 @@ def _sheet_fixkosten(wb: Workbook, buchungen: List[Buchung]) -> None:
     ws.cell(row=r, column=5).font = _SUMME_FONT
 
     _spaltenbreiten(ws, {1: 24, 2: 26, 3: 12, 4: 40, 5: 14, 6: 18, 7: 30, 8: 34})
+    _finalisiere(ws, 8)
 
 
 def _turnus_erklaerung(turnus: str) -> str:
@@ -312,6 +357,38 @@ def _sheet_konsum(wb: Workbook, buchungen: List[Buchung]) -> None:
         r += 1
 
     _spaltenbreiten(ws, {1: 24, 2: 12, 3: 16, 4: 34, 5: 14})
+    _finalisiere(ws, 5)
+
+
+# --- SHEET: Wiederkehrend --------------------------------------------------
+def _sheet_wiederkehrend(wb: Workbook, wiederkehrer) -> None:
+    ws = wb.create_sheet("Wiederkehrend")
+    spalten = ["Empfaenger", "Art", "Turnus", "Anzahl", "Erster", "Letzter",
+               "Ø-Betrag", "Summe", "Klassifikation", "Betragsschwankung"]
+    _schreibe_kopf(ws, spalten)
+
+    r = 2
+    for g in wiederkehrer:
+        ws.cell(row=r, column=1, value=g.empfaenger)
+        ws.cell(row=r, column=2, value=g.art)
+        ws.cell(row=r, column=3, value=g.turnus)
+        ws.cell(row=r, column=4, value=g.anzahl)
+        _datumzelle(ws, r, 5, g.erster)
+        _datumzelle(ws, r, 6, g.letzter)
+        _geldzelle(ws, r, 7, g.schnitt)
+        _geldzelle(ws, r, 8, g.summe)
+        z = ws.cell(row=r, column=9, value=g.klassifikation)
+        if g.klassifikation == "SICHER":
+            z.font = Font(bold=True, color="1F7A1F")
+        ws.cell(row=r, column=10, value="ja" if g.schwankung else "nein")
+        r += 1
+
+    if not wiederkehrer:
+        ws.cell(row=2, column=1, value="Keine wiederkehrenden Zahlungen erkannt.")
+
+    _spaltenbreiten(ws, {1: 34, 2: 8, 3: 18, 4: 8, 5: 12, 6: 12, 7: 14, 8: 14,
+                         9: 16, 10: 16})
+    _finalisiere(ws, 10)
 
 
 # --- SHEET 4: Pruefen ------------------------------------------------------
@@ -338,6 +415,7 @@ def _sheet_pruefen(wb: Workbook, buchungen: List[Buchung]) -> None:
         ws.cell(row=2, column=1, value="Keine Buchungen mit Status PRUEFEN -- alles kontrolliert. :)")
 
     _spaltenbreiten(ws, {1: 24, 2: 12, 3: 50, 4: 14, 5: 28, 6: 22})
+    _finalisiere(ws, 6)
 
 
 # --- verstecktes Persistenz-Blatt "_Daten" ---------------------------------
@@ -357,7 +435,12 @@ def _sheet_daten(wb: Workbook, buchungen: List[Buchung]) -> None:
             "status": b.status,
             "kategorie": b.kategorie,
             "typ": b.typ,
+            "art": b.art,
             "empfaenger": b.empfaenger,
+            "referenz": b.referenz,
+            "mandatsref": b.mandatsref,
+            "glaeubiger_id": b.glaeubiger_id,
+            "vertragsnr": b.vertragsnr,
             "turnus": b.turnus,
             "vermerk": b.vermerk,
             "auszug_differenz": round(b.auszug_differenz, 2),
@@ -369,3 +452,89 @@ def _sheet_daten(wb: Workbook, buchungen: List[Buchung]) -> None:
         r += 1
 
     ws.sheet_state = "hidden"
+
+
+# ===========================================================================
+# FEATURE 3 -- Excel als Input (bestehendes Journal statt PDFs)
+# ===========================================================================
+# Spaltenname (lowercased) -> Feld. Toleriert uebliche Varianten.
+_JOURNAL_SPALTEN = {
+    "kontonummer": "konto", "konto": "konto",
+    "datum": "datum",
+    "art": "art",
+    "verwendungszweck_voll": "verwendungszweck",   # Header der VOLL-Ausgabe
+    "verwendungszweck": "verwendungszweck", "zweck": "verwendungszweck",
+    "empfaenger": "empfaenger", "empfänger": "empfaenger",
+    "einnahme": "einnahme",
+    "ausgabe": "ausgabe",
+    "betrag": "betrag",
+    "typ": "typ",
+    "status": "status",
+}
+
+
+def lese_journal_excel(pfad: str) -> List[Buchung]:
+    """Liest ein bestehendes (VOLLSTAENDIGES) Journal-Sheet zu Buchungen ein.
+
+    Erwartet Spalten Datum, Verwendungszweck, Einnahme/Ausgabe (oder Betrag),
+    optional Art/Typ/Kontonummer/Status. Aus Einnahme (positiv) bzw. Ausgabe
+    (negativ) wird der vorzeichenbehaftete Betrag gebildet.
+    """
+    wb = load_workbook(pfad, data_only=True)
+    ws = wb["Journal"] if "Journal" in wb.sheetnames else wb[wb.sheetnames[0]]
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return []
+
+    kopf = [str(c).strip().lower() if c is not None else "" for c in rows[0]]
+    idx = {}
+    for i, name in enumerate(kopf):
+        feld = _JOURNAL_SPALTEN.get(name)
+        if feld and feld not in idx:
+            idx[feld] = i
+
+    def zelle(row, feld):
+        i = idx.get(feld)
+        return row[i] if i is not None and i < len(row) else None
+
+    buchungen: List[Buchung] = []
+    for row in rows[1:]:
+        if row is None or all(c is None for c in row):
+            continue
+        einnahme = _zu_float(zelle(row, "einnahme"))
+        ausgabe = _zu_float(zelle(row, "ausgabe"))
+        betrag = _zu_float(zelle(row, "betrag"))
+        if betrag is None:
+            betrag = (einnahme or 0.0) + (ausgabe or 0.0)  # Ausgabe ist bereits negativ
+        # Verwendungszweck bevorzugt; sonst Empfaenger-Spalte als Ersatz
+        # (fuer die Wiederkehrer-Gruppierung).
+        zweck = str(zelle(row, "verwendungszweck") or "").strip()
+        empf = str(zelle(row, "empfaenger") or "").strip()
+        if not zweck:
+            zweck = empf
+        if not zweck and betrag == 0:
+            continue
+        b = Buchung(
+            konto=str(zelle(row, "konto") or "").strip(),
+            datum=_zu_datum(zelle(row, "datum")),
+            verwendungszweck=zweck,
+            empfaenger=empf,
+            betrag=round(betrag, 2),
+            status=str(zelle(row, "status") or "OK").strip() or "OK",
+            typ=str(zelle(row, "typ") or "").strip(),
+            art=str(zelle(row, "art") or "").strip(),
+        )
+        buchungen.append(b)
+    return buchungen
+
+
+def _zu_float(wert):
+    if wert in (None, ""):
+        return None
+    if isinstance(wert, (int, float)):
+        return float(wert)
+    s = str(wert).strip().replace(".", "").replace(",", ".")  # deutsches Format
+    try:
+        return float(s)
+    except ValueError:
+        return None

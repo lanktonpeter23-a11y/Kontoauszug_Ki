@@ -22,7 +22,8 @@ Android, aarch64, kein Root).
 ```
 /data/data/com.termux/files/home/downloads/Kontoauszuege/   <- HIER PDFs hineinwerfen
         ├── Auswertung/
-        │      ├── Finanzanalyse.xlsx              <- Ergebnis (4 Sheets)
+        │      ├── Finanzanalyse_VOLL.xlsx         <- vollständig, Klarnamen (Append-Quelle)
+        │      ├── Finanzanalyse_ANONYM.xlsx       <- Personennamen → [NAME], IBAN/BIC maskiert
         │      └── ocr/<pdfname>.txt               <- OCR-Dump je PDF (Parsing-Input, ===SEITENENDE===)
         └── verarbeitet/                           <- fertige PDFs (verschoben, nie gelöscht)
 ```
@@ -35,10 +36,12 @@ Android, aarch64, kein Root).
 1. Beliebig viele Scan-PDFs (mehrere Monate, mehrere Konten, verschiedene
    Banken gemischt) in den Ordner `Kontoauszuege/` legen.
 2. `python analyse.py` aufrufen — **ein Aufruf verarbeitet ALLES**.
-3. Ergebnis: `Kontoauszuege/Auswertung/Finanzanalyse.xlsx`.
+3. Ergebnis: **zwei** Dateien in `Auswertung/` — `Finanzanalyse_VOLL.xlsx`
+   (Klarnamen) und `Finanzanalyse_ANONYM.xlsx` (Personennamen → `[NAME]`,
+   IBAN/BIC maskiert).
 4. Verarbeitete PDFs wandern automatisch nach `Kontoauszuege/verarbeitet/`.
 
-Bei erneutem Aufruf wird die bestehende `Finanzanalyse.xlsx` geladen und um
+Bei erneutem Aufruf wird die bestehende `Finanzanalyse_VOLL.xlsx` geladen und um
 **neue** Buchungen ergänzt (Duplikate werden erkannt und übersprungen —
 **Append-Modus**).
 
@@ -189,10 +192,20 @@ nutzt keine anbieter-spezifischen Endpunkte.
 ## Aufruf
 
 ```bash
-python analyse.py            # kompletter Lauf inkl. Excel + Verschieben
-python analyse.py --dry-run  # NUR parsen + Kontrollschicht-Report auf der
-                             # Konsole; kein Excel, kein Verschieben
+python analyse.py                     # kompletter Lauf inkl. Excel + Verschieben
+python analyse.py --dry-run           # NUR parsen + Kontrollschicht-Report auf der
+                                      # Konsole; kein Excel, kein Verschieben
+python analyse.py --excel DATEI.xlsx  # bestehendes VOLLSTÄNDIGES Journal erneut
+                                      # auswerten (statt PDFs zu OCRn)
 ```
+
+> **`--excel`** liest ein bestehendes Journal-Sheet (Spalten *Datum*,
+> *Verwendungszweck/Empfaenger*, *Einnahme*, *Ausgabe*, *Art/Typ*) statt PDFs
+> zu OCRn und durchläuft dieselbe Nachverarbeitung (Referenztrennung →
+> Wiederkehrer → Anonymisierung → zwei Ausgabedateien). **Nur eine
+> VOLLSTÄNDIGE (nicht-anonymisierte) Excel taugt als Input** — eine bereits
+> anonymisierte Datei kann nicht gruppiert werden (Empfänger fehlen).
+> Rückwärts geht nicht.
 
 `--dry-run` ist ideal, um bei einer neuen Bank zu prüfen, ob Salden und
 Buchungen korrekt erkannt werden, **bevor** in die Excel geschrieben wird.
@@ -252,24 +265,43 @@ generischer Fallback-Parser greift, wenn kein Profil passt. Ein Profil:
 
 ---
 
-## Ausgabe: `Finanzanalyse.xlsx` (4 Sheets)
+## Ausgabe: zwei Dateien, je 5 Sheets
 
-1. **Journal** — lückenlos jede Buchung, chronologisch:
-   `Kontonummer | Datum | Verwendungszweck | Einnahme | Ausgabe | Typ |
-   Status`. Einnahmen als Pluswert in *Einnahme*, Ausgaben als Minuswert in
-   *Ausgabe*; interne Überträge als Typ `UMBUCHUNG`.
+Es werden **zwei** Dateien geschrieben: `Finanzanalyse_VOLL.xlsx` (Klarnamen)
+und `Finanzanalyse_ANONYM.xlsx` (Personennamen → `[NAME]`, IBAN/BIC maskiert;
+Firmen bleiben — auch im Wiederkehrend-Sheet). Beide enthalten dieselben Sheets:
+
+1. **Journal** — lückenlos jede Buchung, chronologisch, mit getrennten Feldern:
+   `Datum | Art | Empfaenger | Einnahme | Ausgabe | Typ | Status | Referenz |
+   Mandatsref | Glaeubiger-ID | Vertrags-/Kundennr | Verwendungszweck_voll`.
+   Einnahmen als Pluswert in *Einnahme*, Ausgaben als Minuswert in *Ausgabe*
+   (das jeweils andere Feld bleibt **echt leer** → summierbar); interne
+   Überträge als Typ `UMBUCHUNG`. **Art** = Kürzel per Prefix-Match
+   (LS/UEW/KA/GUT/LOHN/GA/SONST). **Referenz/Mandatsref/Glaeubiger-ID/
+   Vertrags-/Kundennr** werden per Regex aus dem Text gezogen, sodass
+   *Empfaenger* nur den Klar-/Firmennamen enthält; der Originaltext steht
+   als Beleg ganz rechts in *Verwendungszweck_voll*.
 2. **Fixkosten** — gruppiert nach Zahlungsempfänger, chronologisch; mit
-   **Turnus** (von Python aus den Buchungsabständen berechnet),
-   **Erklärung** und **Vermerk bei Preiserhöhung**. Unten: Jahressumme +
-   monatlicher Durchschnitt (Jahressumme/12).
-3. **Konsum** — `Kontonummer | Datum | Kategorie (Lebenshaltung/Tanken) |
-   Empfänger | Betrag`. Unten: monatlicher Durchschnitt je Kategorie.
-4. **Pruefen** — alle Buchungen mit Status `PRUEFEN` inkl. Saldo-Differenz
-   je Auszug — zum gezielten Nachschauen.
+   **Turnus**, **Erklärung** und **Vermerk bei Preiserhöhung**. Unten:
+   Jahressumme + monatlicher Durchschnitt (Jahressumme/12).
+3. **Konsum** — Lebenshaltung/Tanken + monatlicher Durchschnitt je Kategorie.
+4. **Wiederkehrend** — deterministisch erkannte wiederkehrende Zahlungen:
+   `Empfaenger | Art | Turnus | Anzahl | Erster | Letzter | Ø-Betrag | Summe |
+   Klassifikation | Betragsschwankung`. Klassifikation **SICHER** (≥3 Vorkommen
+   in regelmäßigem Abstand) oder **WAHRSCHEINLICH** (2 Vorkommen bzw. ≥3
+   unregelmäßig). *Betragsschwankung = ja* ist ein Preiserhöhungs-Hinweis.
+5. **Pruefen** — alle Buchungen mit Status `PRUEFEN` inkl. Saldo-Differenz.
 
-Zahlen werden als **echte Zahlen** (Excel-Zahlenformat) geschrieben, nicht
-als Text. Ein verstecktes Blatt `_Daten` speichert den vollständigen
-Buchungssatz und dient dem Append-Modus.
+Zahlen sind **echte Zahlen** (Excel-Zahlenformat), Kopfzeile fett, **Autofilter
+an**, erste Zeile fixiert, feste Spaltenbreiten und `wrap_text=False` (kein
+Überlauf in Nachbarspalten). Ein verstecktes Blatt `_Daten` in der
+**VOLL**-Datei speichert den vollständigen Buchungssatz für den Append-Modus
+(die ANONYM-Datei enthält es bewusst **nicht** — sie ist nie Append-Quelle).
+
+**Verarbeitungsreihenfolge (zwingend):** parsen → Referenzen/Empfänger trennen
+→ Wiederkehrer am **echten** Empfänger gruppieren → **erst dann** anonymisieren
+→ Ausgabe. Alle vier Erweiterungen sind rein deterministisch (Regex/Logik),
+nie KI.
 
 ---
 
@@ -313,6 +345,7 @@ Buchungssatz und dient dem Append-Modus.
 ```bash
 python textutils.py     # prüft die deutsche Betrags-/Datumserkennung
 python test_parser.py   # Unit-Tests + GOLDEN-MASTER gegen echten LIGA-Auszug
+python test_features.py # Anonymisierung / Referenzen / Art / Wiederkehrer / Excel-Input
 ```
 
 `test_parser.py` enthält einen **Golden-Master-Test** gegen den echten,
@@ -341,7 +374,7 @@ werden nie automatisch korrigiert.
 
 | Datei | Inhalt |
 |-------|--------|
-| `analyse.py` | Hauptprogramm / Orchestrierung + CLI (`--dry-run`) |
+| `analyse.py` | Hauptprogramm / Orchestrierung + CLI (`--dry-run`, `--excel`) |
 | `config.py` | Pfade & Konstanten, Laden von Bank-Profilen und `config.json` |
 | `config.json` | KI-Backend-Konfiguration (base_url, model, enabled, timeout) |
 | `render.py` | Ebene 1 — Rendern + Bildvorverarbeitung |
@@ -351,8 +384,13 @@ werden nie automatisch korrigiert.
 | `control.py` | Ebene 4 — Saldo-Kontrollschicht |
 | `categorize.py` | `LLMClient` — austauschbares KI-Backend (OpenAI-kompatibel), nur Kategorien |
 | `turnus.py` | Turnus- & Preiserhöhungs-Berechnung (Python) |
-| `excel_export.py` | Excel-Ausgabe (4 Sheets, Append-Modus) |
+| `buchungsart.py` | Buchungsart-Kürzel (LS/UEW/KA/GUT/LOHN/GA/SONST) |
+| `journalfelder.py` | Referenzfelder (EREF/MREF/CRED/Vertragsnr) aus dem Zweck ziehen |
+| `wiederkehrer.py` | deterministische Wiederkehrer-Erkennung (Sheet „Wiederkehrend") |
+| `anonymisierung.py` | Personennamen → `[NAME]`, IBAN/BIC maskieren (letzter Schritt) |
+| `excel_export.py` | Excel-Ausgabe (5 Sheets, Append-Modus, Excel-Input) |
 | `models.py` | Datenmodelle (`Buchung`, `Auszug`) |
+| `test_features.py` | Unit-Tests für Anonymisierung/Referenzen/Art/Wiederkehrer/Excel-Input |
 | `bank_profiles.json` | konfigurierbare Bank-Layout-Profile |
 | `test_parser.py` | Unit-Tests + Golden-Master (echter LIGA-Auszug) |
 | `tests/fixtures/liga_ocr_anonymized.txt` | anonymisierte Golden-Master-Fixture |

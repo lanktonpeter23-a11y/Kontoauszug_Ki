@@ -31,8 +31,11 @@ from typing import List
 
 import config
 import excel_export
+from anonymisierung import anonymisiere_buchungen, anonymisiere_wiederkehrer
+from buchungsart import extrahiere_art
 from categorize import LLMClient
 from control import kontroll_report, pruefe_auszug
+from journalfelder import extrahiere_felder
 from models import (
     KAT_UMBUCHUNG,
     KAT_UNKATEGORISIERT,
@@ -45,7 +48,8 @@ from models import (
 from ocr import bild_zu_text, pruefe_tesseract_sprache
 from render import pdf_zu_bildern, vorverarbeiten
 from statement_parser import parse_auszug
-from turnus import berechne_turnus_und_preise, empfaenger_anzeige
+from turnus import berechne_turnus_und_preise
+from wiederkehrer import finde_wiederkehrer
 
 
 # ===========================================================================
@@ -108,10 +112,16 @@ def kategorisiere_und_bereite_auf(buchungen: List[Buchung]) -> None:
     for b in offen:
         b.kategorie = zuordnung.get(b.verwendungszweck, KAT_UNKATEGORISIERT)
 
-    # Typ + Empfaenger fuer ALLE Buchungen ableiten.
+    # Art + Referenzfelder + Klar-Empfaenger (deterministisch) + Typ ableiten.
     for b in buchungen:
-        if not b.empfaenger:
-            b.empfaenger = empfaenger_anzeige(b.verwendungszweck)
+        if not b.art:
+            b.art = extrahiere_art(b.verwendungszweck)
+        felder = extrahiere_felder(b.verwendungszweck)
+        b.empfaenger = felder["empfaenger"]
+        b.referenz = felder["referenz"]
+        b.mandatsref = felder["mandatsref"]
+        b.glaeubiger_id = felder["glaeubiger_id"]
+        b.vertragsnr = felder["vertragsnr"]
         if b.kategorie == KAT_UMBUCHUNG:
             b.typ = TYP_UMBUCHUNG
         elif b.betrag >= 0:
@@ -130,11 +140,18 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Lokale Kontoauszug-Analyse (Termux).")
     parser.add_argument("--dry-run", action="store_true",
                         help="Nur parsen + Kontroll-Report; kein Excel, kein Verschieben.")
+    parser.add_argument("--excel", metavar="PFAD",
+                        help="Bestehendes (VOLLSTAENDIGES) Journal-Excel einlesen statt PDFs "
+                             "zu OCRn und erneut auswerten (Wiederkehrer + Anonymisierung).")
     args = parser.parse_args(argv)
 
     print("=" * 64)
     print(" Kontoauszug-KI  --  lokale Analyse (Termux)")
     print("=" * 64)
+
+    # --- FEATURE 4: Excel als Input (kein OCR) ---
+    if args.excel:
+        return _excel_input_lauf(args.excel)
 
     # Vorpruefung: deutsches Sprachpaket vorhanden?
     if not pruefe_tesseract_sprache():
@@ -192,20 +209,72 @@ def main(argv=None) -> int:
         print(f"\n  [Excel] {len(bestehend)} bestehende Buchungen geladen (Append-Modus).")
     gesamt = excel_export.merge_buchungen(bestehend, alle_neuen)
 
-    # --- KI-Kategorisierung + Turnus/Preise (auf dem Gesamtbestand) ---
-    print("\n--- Kategorisierung + Turnus ---")
+    # --- KI-Kategorisierung + Referenztrennung + Turnus/Preise ---
+    print("\n--- Kategorisierung + Referenzfelder + Turnus ---")
     kategorisiere_und_bereite_auf(gesamt)
 
-    # --- Excel schreiben ---
-    print("\n--- Excel schreiben ---")
-    excel_export.schreibe_excel(config.EXCEL_DATEI, gesamt)
-    print(f"  [Excel] geschrieben: {config.EXCEL_DATEI}")
+    # --- Wiederkehrer gruppieren (am ECHTEN Empfaenger) + Excel schreiben ---
+    _schreibe_ausgaben(gesamt)
 
     # --- verarbeitete PDFs verschieben (nie loeschen) ---
     _verschiebe_verarbeitet(verarbeitete_pdfs)
 
     _abschlussbericht(auszuege, fehler)
     return 0 if not fehler else 1
+
+
+# ===========================================================================
+# Ausgabe: Wiederkehrer + ZWEI Excel-Dateien (VOLL + ANONYM)
+# ===========================================================================
+def _schreibe_ausgaben(gesamt: List[Buchung]) -> None:
+    """Reihenfolge zwingend: ERST gruppieren (echte Empfaenger), DANN
+    anonymisieren -> VOLL + ANONYM schreiben."""
+    print("\n--- Wiederkehrer erkennen + Excel schreiben (VOLL + ANONYM) ---")
+    wiederkehrer = finde_wiederkehrer(gesamt)               # auf Klarnamen!
+    print(f"  [Wiederkehrer] {len(wiederkehrer)} Gruppe(n) erkannt.")
+
+    excel_export.schreibe_excel(config.EXCEL_VOLL, gesamt, wiederkehrer, mit_daten=True)
+    print(f"  [Excel] VOLL  : {config.EXCEL_VOLL}")
+
+    # Anonymisierung ist der LETZTE Schritt (nach der Gruppierung).
+    anon_buch = anonymisiere_buchungen(gesamt)
+    anon_wied = anonymisiere_wiederkehrer(wiederkehrer)
+    excel_export.schreibe_excel(config.EXCEL_ANONYM, anon_buch, anon_wied, mit_daten=False)
+    print(f"  [Excel] ANONYM: {config.EXCEL_ANONYM}")
+
+
+def _wirkt_anonymisiert(buchungen: List[Buchung]) -> bool:
+    treffer = sum(1 for b in buchungen
+                  if "[NAME]" in b.verwendungszweck or "DE**" in b.verwendungszweck)
+    return treffer >= max(1, len(buchungen) // 5)
+
+
+def _excel_input_lauf(pfad: str) -> int:
+    """FEATURE 4: bestehendes VOLLSTAENDIGES Journal-Excel erneut auswerten."""
+    print("\n--- Excel-Input-Modus ---")
+    print("  [Hinweis] Es muss eine VOLLSTAENDIGE (nicht-anonymisierte) Excel sein.")
+    print("            Eine bereits anonymisierte Excel kann NICHT gruppiert werden")
+    print("            (Empfaenger fehlen) -- rueckwaerts geht nicht.")
+    if not os.path.exists(pfad):
+        print(f"  [FEHLER] Excel nicht gefunden: {pfad}")
+        return 2
+    try:
+        buchungen = excel_export.lese_journal_excel(pfad)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  [FEHLER] Excel nicht lesbar: {exc}")
+        return 2
+    if not buchungen:
+        print("  Keine Buchungen im Journal-Sheet gefunden.")
+        return 1
+    if _wirkt_anonymisiert(buchungen):
+        print("  [WARN] Diese Excel wirkt bereits anonymisiert ([NAME]/DE**...). "
+              "Die Wiederkehrer-Gruppierung wird dadurch unbrauchbar.")
+    print(f"  {len(buchungen)} Buchungen aus dem Journal gelesen.")
+
+    kategorisiere_und_bereite_auf(buchungen)
+    _schreibe_ausgaben(buchungen)
+    print("\nFertig (Excel-Input).")
+    return 0
 
 
 # ===========================================================================

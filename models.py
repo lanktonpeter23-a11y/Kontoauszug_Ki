@@ -65,7 +65,14 @@ class Buchung:
     # Von der KI / Python-Nachbearbeitung gesetzt
     kategorie: str = KAT_UNKATEGORISIERT
     typ: str = TYP_AUSGABE          # Einnahme / Ausgabe / UMBUCHUNG
-    empfaenger: str = ""            # Zahlungsempfaenger (heuristisch aus Zweck)
+    art: str = ""                   # Buchungsart-Kuerzel (LS/UEW/KA/GUT/LOHN/GA/SONST)
+    empfaenger: str = ""            # Zahlungsempfaenger (Klarname, Referenzen entfernt)
+
+    # Deterministisch aus dem Verwendungszweck extrahierte Referenzfelder
+    referenz: str = ""              # EREF (End-to-End-Referenz)
+    mandatsref: str = ""            # MREF (Mandatsreferenz)
+    glaeubiger_id: str = ""         # CRED (Glaeubiger-ID)
+    vertragsnr: str = ""            # Vertrags-/Kunden-/Objektnummer(n)
     turnus: str = ""                # z.B. "monatlich" (nur bei Fixkosten, von Python berechnet)
     vermerk: str = ""               # z.B. "Preiserhoehung: 12,99 -> 14,99"
 

@@ -27,8 +27,14 @@ BASIS_ORDNER = os.environ.get(
 AUSWERTUNG_ORDNER = os.path.join(BASIS_ORDNER, "Auswertung")
 # ... verarbeitete PDFs werden hierhin VERSCHOBEN (nie geloescht) ...
 VERARBEITET_ORDNER = os.path.join(BASIS_ORDNER, "verarbeitet")
-# ... und die eine Excel-Datei heisst:
-EXCEL_DATEI = os.path.join(AUSWERTUNG_ORDNER, "Finanzanalyse.xlsx")
+
+# ZWEI Ausgabedateien:
+#   VOLL   -- vollstaendig mit Klarnamen (auch Append-Quelle, enthaelt _Daten)
+#   ANONYM -- identisch, aber Personennamen -> [NAME], IBAN/BIC maskiert
+EXCEL_VOLL = os.path.join(AUSWERTUNG_ORDNER, "Finanzanalyse_VOLL.xlsx")
+EXCEL_ANONYM = os.path.join(AUSWERTUNG_ORDNER, "Finanzanalyse_ANONYM.xlsx")
+# Append/Persistenz laeuft ueber die VOLL-Datei.
+EXCEL_DATEI = EXCEL_VOLL
 
 # Temporaerer Ordner fuer gerenderte Seitenbilder (wird pro Lauf geleert).
 TEMP_ORDNER = os.path.join(AUSWERTUNG_ORDNER, ".tmp_render")
