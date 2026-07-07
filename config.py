@@ -44,6 +44,26 @@ OCR_ORDNER = os.path.join(AUSWERTUNG_ORDNER, "ocr")
 # Seiten-Trenner im internen OCR-Text (auch im Dump verwendet).
 SEITEN_TRENNER = "===SEITENENDE==="
 
+# FEATURE 5B -- Ausgabe zusaetzlich in einen fuer Android sichtbaren Ordner
+# kopieren + MediaScanner anstossen. Kandidaten in Reihenfolge der Bevorzugung.
+SHARED_DOWNLOAD_KANDIDATEN = [
+    os.path.expanduser("~/storage/shared/Download"),
+    "/storage/emulated/0/Download",
+    "/sdcard/Download",
+]
+
+
+def export_to_shared_aktiv() -> bool:
+    """config.json: 'export_to_shared' (Default True)."""
+    try:
+        with open(_CONFIG_DATEI, "r", encoding="utf-8") as fh:
+            daten = json.load(fh)
+        if isinstance(daten, dict) and "export_to_shared" in daten:
+            return bool(daten["export_to_shared"])
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+    return True
+
 # ---------------------------------------------------------------------------
 # EBENE 1 -- Rendern
 # ---------------------------------------------------------------------------

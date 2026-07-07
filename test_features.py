@@ -142,9 +142,9 @@ def test_f_kein_ueberlauf():
         Buchung(konto="X", datum=date(2025, 1, 3), verwendungszweck="LASTSCHRIFT Strom",
                 betrag=-80.0, art="LS", empfaenger="Stadtwerke", typ="Ausgabe", status="OK"),
     ]
-    excel_export.schreibe_excel(pfad, buch, wiederkehrer=[], mit_daten=True)
+    excel_export.schreibe_excel(pfad, buch, wiederkehrer_je_konto={}, mit_daten=True)
     wb = load_workbook(pfad)
-    ws = wb["Journal"]
+    ws = wb[[n for n in wb.sheetnames if n.startswith("Journal")][0]]
     # Spalte 4 = Einnahme, 5 = Ausgabe
     einn = [ws.cell(row=r, column=4).value for r in (2, 3)]
     ausg = [ws.cell(row=r, column=5).value for r in (2, 3)]
@@ -306,6 +306,60 @@ def test_n_wiederkehrer_nur_verpflichtungen():
           "Tankstelle (2x, keine Referenz) = KEIN Wiederkehrer")
 
 
+def test_o_multi_konto():
+    print("\n== o) Multi-Konto-Trennung (Feature 5A) ==")
+    import excel_export
+    from anonymisierung import anonymisiere_buchungen, anonymisiere_wiederkehrer, ist_identifizierbar
+    from openpyxl import load_workbook
+    # Zwei Konten, je eigene monatliche Verpflichtung + eigener Saldo-Status.
+    k1 = "DE79750903000001320424"
+    k2 = "DE11220000000000009999"
+    buch = []
+    for d in (date(2025, 1, 5), date(2025, 2, 5), date(2025, 3, 5)):
+        buch.append(Buchung(konto=k1, datum=d, betrag=-12.99, status="OK",
+                            empfaenger="Netflix", mandatsref="NFLX-1",
+                            verwendungszweck="LASTSCHRIFT PN:931 Netflix Europe"))
+    for d in (date(2025, 1, 8), date(2025, 2, 8), date(2025, 3, 8)):
+        buch.append(Buchung(konto=k2, datum=d, betrag=-25.0, status="PRUEFEN",
+                            empfaenger="congstar", mandatsref="CS-9",
+                            verwendungszweck="LASTSCHRIFT PN:931 congstar"))
+
+    # Wiederkehrer je Konto (wie in analyse._schreibe_ausgaben).
+    konten = {}
+    for b in buch:
+        konten.setdefault(b.konto, []).append(b)
+    wied = {k: [g for g in finde_wiederkehrer(kb) if ist_identifizierbar(g.empfaenger)]
+            for k, kb in konten.items()}
+
+    pfad = os.path.join(tempfile.mkdtemp(), "voll.xlsx")
+    excel_export.schreibe_excel(pfad, buch, wied, mit_daten=True, anonym=False)
+    wb = load_workbook(pfad)
+    check(wb.sheetnames[0] == "Konten", "Konten-Uebersicht ist das erste Sheet")
+    check("Journal_0424" in wb.sheetnames and "Journal_9999" in wb.sheetnames,
+          f"2 getrennte Journal-Sheets ({[n for n in wb.sheetnames if n.startswith('Journal')]})")
+    check("Wiederkehrend_0424" in wb.sheetnames and "Wiederkehrend_9999" in wb.sheetnames,
+          "2 getrennte Wiederkehrend-Sheets")
+    # Journal_0424 enthaelt nur Konto 1 (3 Zeilen)
+    j1 = wb["Journal_0424"]
+    check(j1.max_row == 4, f"Journal_0424 hat 3 Buchungen ({j1.max_row - 1})")
+    # Konten-Sheet: Status je Konto (OK vs PRUEFEN) getrennt
+    ku = wb["Konten"]
+    zeilen = {ku.cell(row=r, column=1).value: ku.cell(row=r, column=6).value
+              for r in range(2, ku.max_row + 1)}
+    check(any(v == "PRUEFEN" for v in zeilen.values()) and any(v == "OK" for v in zeilen.values()),
+          f"Saldo-Status je Konto getrennt ({zeilen})")
+
+    # ANONYM: Kontonummern maskiert, Sheet-Struktur identisch
+    ap = os.path.join(tempfile.mkdtemp(), "anon.xlsx")
+    aw = {k: anonymisiere_wiederkehrer(v) for k, v in wied.items()}
+    excel_export.schreibe_excel(ap, anonymisiere_buchungen(buch), aw, mit_daten=False, anonym=True)
+    wba = load_workbook(ap)
+    kua = wba["Konten"]
+    labels = [kua.cell(row=r, column=1).value for r in range(2, kua.max_row + 1)]
+    check(all(str(l).startswith("****") for l in labels), f"ANONYM: Konten maskiert ({labels})")
+    check("_Daten" not in wba.sheetnames, "ANONYM ohne _Daten")
+
+
 if __name__ == "__main__":
     test_a_anonymisierung()
     test_b_referenzen()
@@ -321,5 +375,6 @@ if __name__ == "__main__":
     test_l_personen_nicht_im_sheet()
     test_m_kein_namensrest_substring()
     test_n_wiederkehrer_nur_verpflichtungen()
+    test_o_multi_konto()
     print("\n" + ("Alle Feature-Tests bestanden." if _fehler == 0 else f"{_fehler} FEHLER!"))
     raise SystemExit(1 if _fehler else 0)

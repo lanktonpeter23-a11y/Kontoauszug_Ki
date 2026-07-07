@@ -160,12 +160,15 @@ gesteuert:
   "llm_base_url": "http://127.0.0.1:11434",
   "llm_model": "phi4-mini",
   "llm_enabled": true,
-  "llm_timeout": 180
+  "llm_timeout": 180,
+  "export_to_shared": true
 }
 ```
 
 - `llm_base_url` — Adresse des lokalen Servers (Ollama-Standard `:11434`).
 - `llm_model` — Modellname (Alternative z. B. `qwen3.5:4b`).
+- `export_to_shared` — Ausgabedateien zusätzlich in den Android-Download-Ordner
+  kopieren + MediaScanner anstoßen (Default `true`; siehe Feature 5B).
 - `llm_enabled` — `false` schaltet die KI komplett ab (alles bleibt
   `unkategorisiert`).
 - `llm_timeout` — Sekunden pro Anfrage.
@@ -265,13 +268,28 @@ generischer Fallback-Parser greift, wenn kein Profil passt. Ein Profil:
 
 ---
 
-## Ausgabe: zwei Dateien, je 5 Sheets
+## Ausgabe: zwei Dateien, kontogetrennt
 
 Es werden **zwei** Dateien geschrieben: `Finanzanalyse_VOLL.xlsx` (Klarnamen)
 und `Finanzanalyse_ANONYM.xlsx` (Personennamen → `[NAME]`, IBAN/BIC maskiert;
-Firmen bleiben — auch im Wiederkehrend-Sheet). Beide enthalten dieselben Sheets:
+Firmen bleiben — auch im Wiederkehrend-Sheet).
 
-1. **Journal** — lückenlos jede Buchung, chronologisch, mit getrennten Feldern:
+**Multi-Konto-Trennung (Feature 5A):** Werden Auszüge mehrerer Konten gemischt
+verarbeitet, werden sie **sauber pro Konto getrennt** (deterministisch nach
+Kontonummer/IBAN, nie über Kontogrenzen gerechnet):
+- Ein **`Konten`**-Übersichtssheet (erstes Sheet): je Konto eine Zeile mit
+  Kontonummer (in ANONYM als `****<letzte4>` maskiert), Buchungsanzahl,
+  Zeitraum (erster/letzter Umsatz) und Saldo-Status (OK/PRUEFEN).
+- Pro Konto ein eigenes **`Journal_<letzte4>`** und ein eigenes
+  **`Wiederkehrend_<letzte4>`** (z. B. `Journal_0424`); Saldo-Kontrolle und
+  Wiederkehrer-Erkennung laufen je Konto getrennt.
+- Gilt für PDF- **und** Excel-Input; der Append-Modus ordnet neue Buchungen
+  dem richtigen Konto zu (Dedup über Datum+Zweck+Betrag+Konto).
+
+Die folgenden Sheets sind pro Konto (Journal/Wiederkehrend) bzw. als
+Gesamtsicht (Fixkosten/Konsum/Pruefen) vorhanden:
+
+1. **Journal_<letzte4>** — lückenlos jede Buchung, chronologisch, mit getrennten Feldern:
    `Datum | Art | Empfaenger | Einnahme | Ausgabe | Typ | Status | Referenz |
    Mandatsref | Glaeubiger-ID | Vertrags-/Kundennr | Verwendungszweck_voll`.
    Einnahmen als Pluswert in *Einnahme*, Ausgaben als Minuswert in *Ausgabe*
@@ -309,9 +327,18 @@ an**, erste Zeile fixiert, feste Spaltenbreiten und `wrap_text=False` (kein
 (die ANONYM-Datei enthält es bewusst **nicht** — sie ist nie Append-Quelle).
 
 **Verarbeitungsreihenfolge (zwingend):** parsen → Referenzen/Empfänger trennen
-→ Wiederkehrer am **echten** Empfänger gruppieren → **erst dann** anonymisieren
-→ Ausgabe. Alle vier Erweiterungen sind rein deterministisch (Regex/Logik),
-nie KI.
+→ je Konto Wiederkehrer am **echten** Empfänger gruppieren → **erst dann**
+anonymisieren → Ausgabe. Alle Erweiterungen sind rein deterministisch
+(Regex/Logik), nie KI.
+
+**Automatische Sichtbarkeit unter Android (Feature 5B):** Nach dem Schreiben
+werden beide Dateien zusätzlich in einen für den Android-Dateimanager
+sichtbaren Ordner kopiert (`~/storage/shared/Download` bzw.
+`/storage/emulated/0/Download`) und der MediaScanner angestoßen
+(`termux-media-scan`, sonst `am broadcast …MEDIA_SCANNER_SCAN_FILE`), damit sie
+**sofort** erscheinen — kein manuelles `cp`/`termux-media-scan` nötig. Schlägt
+das fehl, läuft das Tool trotzdem durch (nur Konsolen-Hinweis). Abschaltbar
+über `config.json` → `"export_to_shared": false`.
 
 ---
 

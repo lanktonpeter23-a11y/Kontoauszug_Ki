@@ -25,9 +25,10 @@ import argparse
 import glob
 import os
 import shutil
+import subprocess
 import sys
 import traceback
-from typing import List
+from typing import Dict, List
 
 import config
 import excel_export
@@ -231,23 +232,80 @@ def main(argv=None) -> int:
 # Ausgabe: Wiederkehrer + ZWEI Excel-Dateien (VOLL + ANONYM)
 # ===========================================================================
 def _schreibe_ausgaben(gesamt: List[Buchung]) -> None:
-    """Reihenfolge zwingend: ERST gruppieren (echte Empfaenger), DANN
-    anonymisieren -> VOLL + ANONYM schreiben."""
-    print("\n--- Wiederkehrer erkennen + Excel schreiben (VOLL + ANONYM) ---")
-    wiederkehrer = finde_wiederkehrer(gesamt)               # auf Klarnamen!
-    # Nur klar identifizierbare Verpflichtungen ins Sheet -- keine reinen
-    # [NAME]-Gruppen (Personen-Empfaenger ohne Firma/Institution).
-    wiederkehrer = [g for g in wiederkehrer if ist_identifizierbar(g.empfaenger)]
-    print(f"  [Wiederkehrer] {len(wiederkehrer)} identifizierbare Gruppe(n).")
+    """FEATURE 5A -- kontogetrennt. Reihenfolge zwingend: ERST je Konto
+    gruppieren (echte Empfaenger), DANN anonymisieren -> VOLL + ANONYM."""
+    print("\n--- Wiederkehrer je Konto + Excel schreiben (VOLL + ANONYM) ---")
 
-    excel_export.schreibe_excel(config.EXCEL_VOLL, gesamt, wiederkehrer, mit_daten=True)
+    # Pro Konto eigene Wiederkehrer (NIE kontouebergreifend).
+    konten: Dict[str, List[Buchung]] = {}
+    for b in gesamt:
+        konten.setdefault(b.konto or "UNBEKANNT", []).append(b)
+    wied_je_konto: Dict[str, list] = {}
+    for konto, kb in konten.items():
+        w = [g for g in finde_wiederkehrer(kb) if ist_identifizierbar(g.empfaenger)]
+        wied_je_konto[konto] = w
+    print(f"  [Konten] {len(konten)} Konto/Konten getrennt ausgewertet.")
+
+    excel_export.schreibe_excel(config.EXCEL_VOLL, gesamt, wied_je_konto,
+                                mit_daten=True, anonym=False)
     print(f"  [Excel] VOLL  : {config.EXCEL_VOLL}")
 
     # Anonymisierung ist der LETZTE Schritt (nach der Gruppierung).
     anon_buch = anonymisiere_buchungen(gesamt)
-    anon_wied = anonymisiere_wiederkehrer(wiederkehrer)
-    excel_export.schreibe_excel(config.EXCEL_ANONYM, anon_buch, anon_wied, mit_daten=False)
+    anon_wied = {k: anonymisiere_wiederkehrer(w) for k, w in wied_je_konto.items()}
+    excel_export.schreibe_excel(config.EXCEL_ANONYM, anon_buch, anon_wied,
+                                mit_daten=False, anonym=True)
     print(f"  [Excel] ANONYM: {config.EXCEL_ANONYM}")
+
+    # FEATURE 5B -- Ausgabe fuer den Android-Dateimanager sichtbar machen.
+    _sichtbar_machen([config.EXCEL_VOLL, config.EXCEL_ANONYM])
+
+
+def _sichtbar_machen(pfade: List[str]) -> None:
+    """Kopiert die fertigen Dateien in einen fuer Android sichtbaren Ordner und
+    stoesst den MediaScanner an. Robust: Fehler brechen den Lauf nie ab."""
+    if not config.export_to_shared_aktiv():
+        return
+    ziel = _shared_download_ordner()
+    if not ziel:
+        print("  [Export] Kein sichtbarer Download-Ordner gefunden (uebersprungen).")
+        return
+    for p in pfade:
+        try:
+            kopie = shutil.copy(p, ziel)
+            _media_scan(kopie)
+            print(f"  [Export] sichtbar im Dateimanager: {kopie}")
+        except OSError as exc:
+            print(f"  [WARN] Export nach {ziel} fehlgeschlagen: {exc}")
+
+
+def _shared_download_ordner() -> str:
+    for kandidat in config.SHARED_DOWNLOAD_KANDIDATEN:
+        if os.path.isdir(kandidat):
+            return kandidat
+        elternteil = os.path.dirname(kandidat)
+        if os.path.isdir(elternteil):
+            try:
+                os.makedirs(kandidat, exist_ok=True)
+                return kandidat
+            except OSError:
+                continue
+    return ""
+
+
+def _media_scan(pfad: str) -> None:
+    """MediaScanner anstossen (termux-media-scan, sonst am broadcast)."""
+    absolut = os.path.abspath(pfad)
+    for cmd in (
+        ["termux-media-scan", absolut],
+        ["am", "broadcast", "-a", "android.intent.action.MEDIA_SCANNER_SCAN_FILE",
+         "-d", "file://" + absolut],
+    ):
+        try:
+            subprocess.run(cmd, capture_output=True, timeout=20)
+            return
+        except (FileNotFoundError, OSError, subprocess.SubprocessError):
+            continue
 
 
 def _wirkt_anonymisiert(buchungen: List[Buchung]) -> bool:
@@ -276,6 +334,9 @@ def _excel_input_lauf(pfad: str) -> int:
     if _wirkt_anonymisiert(buchungen):
         print("  [WARN] Diese Excel wirkt bereits anonymisiert ([NAME]/DE**...). "
               "Die Wiederkehrer-Gruppierung wird dadurch unbrauchbar.")
+    if not any((b.konto or "").strip() for b in buchungen):
+        print("  [WARN] Keine Kontokennung in der Excel -> alles wird als EIN "
+              "Konto behandelt (keine Multi-Konto-Trennung moeglich).")
     print(f"  {len(buchungen)} Buchungen aus dem Journal gelesen.")
 
     kategorisiere_und_bereite_auf(buchungen)

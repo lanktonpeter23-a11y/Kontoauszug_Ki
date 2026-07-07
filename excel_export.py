@@ -15,6 +15,7 @@ sortiert und alle Sheets frisch geschrieben. Zahlen sind ECHTE Zahlen
 from __future__ import annotations
 
 import os
+import re
 from datetime import date, datetime
 from typing import Dict, List
 
@@ -150,28 +151,104 @@ def _sortiere(buchungen: List[Buchung]) -> List[Buchung]:
 # ===========================================================================
 # Schreiben
 # ===========================================================================
-def schreibe_excel(pfad: str, buchungen: List[Buchung], wiederkehrer=None,
-                   mit_daten: bool = True) -> None:
-    """Erzeugt die komplette Excel-Datei aus dem vollstaendigen Buchungssatz.
+def schreibe_excel(pfad: str, buchungen: List[Buchung], wiederkehrer_je_konto=None,
+                   mit_daten: bool = True, anonym: bool = False) -> None:
+    """Erzeugt die komplette Excel-Datei -- KONTOGETRENNT (Feature 5A).
 
-    ``wiederkehrer`` = Liste der WiederkehrerGruppe fuer das Sheet
-    "Wiederkehrend". ``mit_daten`` = False laesst das versteckte Persistenz-
-    Blatt "_Daten" weg (fuer die ANONYM-Datei, die nie Append-Quelle ist).
+    ``wiederkehrer_je_konto`` = dict {konto -> Liste WiederkehrerGruppe}.
+    Pro Konto entstehen eigene Sheets "Journal_<letzte4>" und
+    "Wiederkehrend_<letzte4>"; ein Uebersichts-Sheet "Konten" steht vorne.
+    ``mit_daten`` = False laesst das versteckte Persistenz-Blatt "_Daten" weg
+    (ANONYM-Datei, nie Append-Quelle). ``anonym`` maskiert die Kontonummern
+    in der Uebersicht.
     """
     buchungen = _sortiere(buchungen)
+    wiederkehrer_je_konto = wiederkehrer_je_konto or {}
     wb = Workbook()
     wb.remove(wb.active)  # leeres Standardblatt entfernen
 
-    _sheet_journal(wb, buchungen)
+    konten = _gruppiere_nach_konto(buchungen)
+    suffixe = _konto_suffixe(list(konten.keys()))
+
+    # Uebersicht zuerst.
+    _sheet_konten(wb, konten, suffixe, anonym)
+    # Pro Konto: eigenes Journal + eigene Wiederkehrer (nie kontouebergreifend).
+    for konto, kb in konten.items():
+        suf = suffixe[konto]
+        _sheet_journal(wb, kb, f"Journal_{suf}")
+        _sheet_wiederkehrend(wb, wiederkehrer_je_konto.get(konto, []), f"Wiederkehrend_{suf}")
+    # Analyse-Sheets ueber alle Konten (Gesamtsicht).
     _sheet_fixkosten(wb, buchungen)
     _sheet_konsum(wb, buchungen)
-    _sheet_wiederkehrend(wb, wiederkehrer or [])
     _sheet_pruefen(wb, buchungen)
     if mit_daten:                       # _Daten nur in die VOLL-Datei (Append-Quelle)
         _sheet_daten(wb, buchungen)
 
     os.makedirs(os.path.dirname(pfad), exist_ok=True)
     wb.save(pfad)
+
+
+# --- Konto-Gruppierung / -Benennung ----------------------------------------
+def _konto_last4(konto: str) -> str:
+    ziffern = re.sub(r"\s", "", konto or "")
+    return ziffern[-4:] if len(ziffern) >= 4 else (ziffern or "0000")
+
+
+def _gruppiere_nach_konto(buchungen: List[Buchung]) -> "Dict[str, list]":
+    konten: Dict[str, list] = {}
+    for b in buchungen:
+        konten.setdefault(b.konto or "UNBEKANNT", []).append(b)
+    return konten
+
+
+def _konto_suffixe(konten: List[str]) -> Dict[str, str]:
+    """Eindeutige Sheet-Suffixe (letzte 4) -- Kollisionen werden durchnummeriert."""
+    ergebnis: Dict[str, str] = {}
+    belegt: Dict[str, int] = {}
+    for konto in konten:
+        basis = _konto_last4(konto)
+        if basis in belegt:
+            belegt[basis] += 1
+            ergebnis[konto] = f"{basis}_{belegt[basis]}"
+        else:
+            belegt[basis] = 1
+            ergebnis[konto] = basis
+    return ergebnis
+
+
+def _konto_label(konto: str, anonym: bool) -> str:
+    if not anonym:
+        return konto or "UNBEKANNT"
+    return "****" + _konto_last4(konto)
+
+
+def _sheet_konten(wb: Workbook, konten: "Dict[str, list]", suffixe: Dict[str, str],
+                  anonym: bool) -> None:
+    ws = wb.create_sheet("Konten")
+    spalten = ["Konto", "Sheet", "Buchungen", "Erster", "Letzter", "Saldo-Status"]
+    _schreibe_kopf(ws, spalten)
+    r = 2
+    for konto, kb in konten.items():
+        mit_datum = [b.datum for b in kb if b.datum]
+        stati = {b.status for b in kb}
+        if STATUS_PRUEFEN in stati:
+            status = STATUS_PRUEFEN
+        elif "OK" in stati:
+            status = "OK"
+        else:
+            status = "OHNE_SALDO_PRUEFUNG"
+        _textzelle(ws, r, 1, _konto_label(konto, anonym))
+        _textzelle(ws, r, 2, "Journal_" + suffixe[konto])
+        ws.cell(row=r, column=3, value=len(kb))
+        _datumzelle(ws, r, 4, min(mit_datum) if mit_datum else None)
+        _datumzelle(ws, r, 5, max(mit_datum) if mit_datum else None)
+        z = ws.cell(row=r, column=6, value=status)
+        z.alignment = _LINKS
+        if status == STATUS_PRUEFEN:
+            z.font = Font(bold=True, color="C00000")
+        r += 1
+    _spaltenbreiten(ws, {1: 28, 2: 20, 3: 12, 4: 12, 5: 12, 6: 20})
+    _finalisiere(ws, len(spalten))
 
 
 # --- gemeinsame Helfer -----------------------------------------------------
@@ -223,8 +300,8 @@ def _spaltenbreiten(ws, breiten: Dict[int, int]) -> None:
 
 
 # --- SHEET 1: Journal ------------------------------------------------------
-def _sheet_journal(wb: Workbook, buchungen: List[Buchung]) -> None:
-    ws = wb.create_sheet("Journal")
+def _sheet_journal(wb: Workbook, buchungen: List[Buchung], name: str = "Journal") -> None:
+    ws = wb.create_sheet(name)
     spalten = ["Datum", "Art", "Empfaenger", "Einnahme", "Ausgabe", "Typ",
                "Status", "Referenz", "Mandatsref", "Glaeubiger-ID",
                "Vertrags-/Kundennr", "Verwendungszweck_voll"]
@@ -361,8 +438,8 @@ def _sheet_konsum(wb: Workbook, buchungen: List[Buchung]) -> None:
 
 
 # --- SHEET: Wiederkehrend --------------------------------------------------
-def _sheet_wiederkehrend(wb: Workbook, wiederkehrer) -> None:
-    ws = wb.create_sheet("Wiederkehrend")
+def _sheet_wiederkehrend(wb: Workbook, wiederkehrer, name: str = "Wiederkehrend") -> None:
+    ws = wb.create_sheet(name)
     spalten = ["Empfaenger", "Art", "Turnus", "Anzahl", "Erster", "Letzter",
                "Ø-Betrag", "Summe", "Klassifikation", "Betragsschwankung"]
     _schreibe_kopf(ws, spalten)
@@ -481,11 +558,25 @@ def lese_journal_excel(pfad: str) -> List[Buchung]:
     (negativ) wird der vorzeichenbehaftete Betrag gebildet.
     """
     wb = load_workbook(pfad, data_only=True)
-    ws = wb["Journal"] if "Journal" in wb.sheetnames else wb[wb.sheetnames[0]]
+    # Beste Wiedergabe: unser eigenes Persistenz-Blatt (enthaelt Konto + alle
+    # Felder) -- so bleibt beim Re-Import die Multi-Konto-Struktur erhalten.
+    if _DATEN_BLATT in wb.sheetnames:
+        return lade_bestehende_buchungen(pfad)
+    # Sonst: alle "Journal*"-Sheets (kontogetrennt), sonst das erste Sheet.
+    journal_sheets = [n for n in wb.sheetnames if n.lower().startswith("journal")]
+    if not journal_sheets:
+        journal_sheets = [wb.sheetnames[0]]
+
+    buchungen: List[Buchung] = []
+    for sheetname in journal_sheets:
+        buchungen.extend(_lese_journal_sheet(wb[sheetname]))
+    return buchungen
+
+
+def _lese_journal_sheet(ws) -> List[Buchung]:
     rows = list(ws.iter_rows(values_only=True))
     if not rows:
         return []
-
     kopf = [str(c).strip().lower() if c is not None else "" for c in rows[0]]
     idx = {}
     for i, name in enumerate(kopf):
